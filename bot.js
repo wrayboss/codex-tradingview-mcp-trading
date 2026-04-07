@@ -59,6 +59,14 @@ function checkOnboarding() {
     console.log("Add the missing values then re-run: node bot.js\n");
     process.exit(0);
   }
+
+  // Always print the CSV location so users know where to find their trade log
+  const csvPath = new URL("trades.csv", import.meta.url).pathname;
+  console.log(`\n📄 Trade log: ${csvPath}`);
+  console.log(
+    `   Open in Google Sheets or Excel any time — or tell Claude to move it:\n` +
+      `   "Move my trades.csv to ~/Desktop" or "Move it to my Documents folder"\n`,
+  );
 }
 
 // ─── Config ────────────────────────────────────────────────────────────────
@@ -362,6 +370,16 @@ async function placeBitGetOrder(symbol, side, sizeUSD, price) {
 // ─── Tax CSV Logging ─────────────────────────────────────────────────────────
 
 const CSV_FILE = "trades.csv";
+
+// Always ensure trades.csv exists with headers — open it in Excel/Sheets any time
+function initCsv() {
+  if (!existsSync(CSV_FILE)) {
+    writeFileSync(CSV_FILE, CSV_HEADERS + "\n");
+    console.log(
+      `📄 Created ${CSV_FILE} — open in Google Sheets or Excel to track trades.`,
+    );
+  }
+}
 const CSV_HEADERS = [
   "Date",
   "Time (UTC)",
@@ -476,6 +494,7 @@ function generateTaxSummary() {
 
 async function run() {
   checkOnboarding();
+  initCsv();
   console.log("═══════════════════════════════════════════════════════════");
   console.log("  Claude Trading Bot");
   console.log(`  ${new Date().toISOString()}`);
