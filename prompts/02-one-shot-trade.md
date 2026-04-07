@@ -17,6 +17,37 @@ Start immediately with Step 1. Do not ask any questions before starting.
 
 ---
 
+## STEP 0 — Wispr Flow (optional but recommended)
+
+Tell the user:
+
+"Before we start — one quick thing. In the video, Lewis is talking to Claude rather than
+typing. He uses a tool called Wispr Flow — it turns your voice into text anywhere on your
+computer, so you can just speak your instructions and Claude hears them.
+
+You don't need it. You can type everything. But if you want it, I'll open it for you now.
+
+Do you want to set up Wispr Flow? Type 'yes' to open it, or 'skip' to continue without it."
+
+**[PAUSE — wait for their answer]**
+
+**If they say 'yes':**
+
+Open Wispr Flow in their browser:
+- **Mac:** `open https://wisprflow.ai?via=lewisjackson`
+- **Windows:** `start https://wisprflow.ai?via=lewisjackson`
+- **Linux:** `xdg-open https://wisprflow.ai?via=lewisjackson`
+
+Tell them: "I've opened Wispr Flow. Download it, install it, and come back when it's
+running. Once it's set up you can speak the rest of this setup instead of typing.
+Type 'done' when you're ready."
+
+**[PAUSE]**
+
+**If they say 'skip':** Move straight to Step 1.
+
+---
+
 ## STEP 1 — Clone the repository
 
 Run the following commands:
@@ -288,35 +319,51 @@ then come back and type 'done'."
 
 **[PAUSE if login is needed]**
 
-Once logged in:
+Once logged in, ask the user before touching anything:
+
+"How often do you want the bot to check for trades?
+
+1. Every 4 hours *(recommended for 4H charts)*
+2. Once a day at 9am UTC
+3. Every hour
+4. Custom — describe what you want
+
+Type 1, 2, 3, or tell me what you want."
+
+**[PAUSE — get their answer]**
+
+Map their choice to a cron expression:
+- 1 → `0 */4 * * *`
+- 2 → `0 9 * * *`
+- 3 → `0 * * * *`
+- Custom → interpret what they said and write the correct cron expression
+
+Now write that schedule into `railway.json` automatically — no need for the user to touch Railway:
+
+```bash
+# Read their chosen cron, then update railway.json with it
+```
+
+Update the `deploy` section of `railway.json` to include:
+```json
+"cronSchedule": "[their chosen cron expression]"
+```
+
+Then deploy:
 ```bash
 railway init
 railway up
 ```
 
-After deployment succeeds, ask: "How often do you want the bot to check for trades?
+Tell them: "Done — I've set your schedule to [plain English description of their choice] and deployed. You don't need to touch Railway at all.
 
-1. Every 4 hours (recommended for 4H charts)
-2. Once a day at 9am UTC
-3. Every hour
-4. Custom — tell me what you want
+Your bot is now live. It's set to PAPER TRADING mode by default — which means it checks everything and logs every decision, but no real money moves until you turn it on. Watch it for a few days. When you're happy, run:
 
-Type 1, 2, 3, or describe what you want."
+```bash
+railway variables set PAPER_TRADING=false
+```
 
-**[PAUSE — get their answer]**
-
-Based on their answer, set the cron schedule in Railway. Map their choice to:
-1. `0 */4 * * *`
-2. `0 9 * * *`
-3. `0 * * * *`
-
-Tell them how to set it: "Go to your Railway project → Settings → Cron Schedule
-and enter: [schedule]. This tells Railway when to run your bot."
-
-Tell them: "Your bot is now deployed. It's set to PAPER TRADING mode by default —
-which means it will log every decision but won't place real orders yet. Watch it for
-a few days. When you're happy with what you see, go to Railway → Variables and
-change PAPER_TRADING from 'true' to 'false'."
+And it goes live."
 
 ---
 
