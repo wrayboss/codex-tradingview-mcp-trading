@@ -104,12 +104,24 @@ MAX_TRADE_SIZE_USD=100
 MAX_TRADES_PER_DAY=3
 ```
 
-**Getting your BitGet API key:**
-- BitGet account → API Management → Create API
-- Name it something like `claude-trading`
-- **Withdrawals: OFF** — always, no exceptions
-- **IP whitelist: ON** — add your IP (Google "what is my IP" if unsure)
-- Write down your passphrase immediately — it can't be recovered after you leave the page
+**Getting your API key:**
+
+Step-by-step guides for all supported exchanges:
+
+| Exchange | Guide |
+|----------|-------|
+| BitGet *(used in the video)* | [docs/exchanges/bitget.md](docs/exchanges/bitget.md) |
+| Binance | [docs/exchanges/binance.md](docs/exchanges/binance.md) |
+| Bybit | [docs/exchanges/bybit.md](docs/exchanges/bybit.md) |
+| OKX | [docs/exchanges/okx.md](docs/exchanges/okx.md) |
+| Coinbase Advanced | [docs/exchanges/coinbase.md](docs/exchanges/coinbase.md) |
+| Kraken | [docs/exchanges/kraken.md](docs/exchanges/kraken.md) |
+| KuCoin | [docs/exchanges/kucoin.md](docs/exchanges/kucoin.md) |
+| Gate.io | [docs/exchanges/gateio.md](docs/exchanges/gateio.md) |
+| MEXC | [docs/exchanges/mexc.md](docs/exchanges/mexc.md) |
+| Bitfinex | [docs/exchanges/bitfinex.md](docs/exchanges/bitfinex.md) |
+
+Two rules that apply to every exchange — **withdrawals OFF, IP whitelist ON**.
 
 ---
 
