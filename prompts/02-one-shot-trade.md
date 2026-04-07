@@ -35,36 +35,94 @@ exchange automatically. Let's go."
 
 ---
 
-## STEP 2 — Set up your BitGet account and API key
+## STEP 2 — Choose your exchange and get your API key
 
-Tell the user: "First, you'll need a BitGet account. BitGet is the exchange we're
-connecting to. If you sign up through this link, you get a $1,000 bonus on your first
-deposit — which you can use to fund the trades this bot will be placing."
+Ask the user:
+
+"Which exchange are you going to use? Lewis uses BitGet in the video — if you want
+to use the same one, type 'bitget'. Otherwise pick from the list below:
+
+1. BitGet *(Lewis uses this — $1,000 bonus link in description)*
+2. Binance
+3. Bybit
+4. OKX
+5. Coinbase Advanced
+6. Kraken
+7. KuCoin
+8. Gate.io
+9. MEXC
+10. Bitfinex
+
+Type the name or number of your exchange."
+
+**[PAUSE — wait for their answer]**
+
+---
+
+### If they choose BitGet:
+
+Tell them: "Great — same as Lewis. If you don't have a BitGet account yet, sign up
+here for a $1,000 bonus on your first deposit:"
 
 Open the BitGet referral link in their default browser:
 - **Mac:** `open https://partner.bitget.com/bg/LewisJackson`
 - **Windows:** `start https://partner.bitget.com/bg/LewisJackson`
 - **Linux:** `xdg-open https://partner.bitget.com/bg/LewisJackson`
 
-Tell them: "I've opened BitGet for you. Create your account if you haven't already,
-then come back here and type 'done' when you're ready."
+"I've opened BitGet for you. Create your account if you haven't already, then
+come back and type 'done'."
 
-**[PAUSE — wait for the user to type 'done' or 'ready' before continuing]**
+**[PAUSE]**
 
-Now walk them through creating their API key:
+Now walk them through creating their API key on mobile:
 
-"Now we need to create your API key. In your BitGet account:
-1. Go to your profile menu → API Management
-2. Click 'Create API'
-3. Give it a name — call it something like 'claude-trading'
-4. Set a passphrase — write this down, you'll need it in a moment
-5. **Withdrawals: OFF** — this is important, always keep this off
-6. **IP whitelist: ON** — add your current IP address (Google 'what is my IP' if unsure)
-7. Copy your API key, secret key, and passphrase
+"Now let's get your API key. Here's the exact process — follow along:
 
-Come back and type 'ready' when you have all three."
+1. Open the BitGet app
+2. Tap the **Home** button at the bottom left
+3. Tap your **profile picture** at the top left
+4. Scroll all the way down and tap **More Services**
+5. Along the top menu, find and tap **Tools**
+6. Tap **API Keys**
+7. Tap **Create API Key** → **Automatically Generated API Keys**
+8. Give it a name — call it something like 'Trader Thing'
+9. Set a **Passphrase** — this is personal to you, write it down now. You can't recover it later.
+10. **Bind IP Address** — optional, skip it if you're not sure
+11. For permissions, select: **Spot Trading** + anything else you want. Leave **Crypto Loans, P2P, Transfer, and Withdrawals OFF** — never turn withdrawals on.
+12. Tap **Confirm** and complete the verification (email or 2FA)
+13. Your **API Key** and **Secret Key** will appear on screen — copy them both now
 
-**[PAUSE — wait for the user to confirm they have their credentials]**
+Type 'ready' when you have your API Key, Secret Key, and Passphrase."
+
+**[PAUSE]**
+
+---
+
+### If they choose any other exchange:
+
+Look up the correct guide from the docs folder and display the full step-by-step
+instructions for their chosen exchange. The guides are at:
+
+- `docs/exchanges/binance.md`
+- `docs/exchanges/bybit.md`
+- `docs/exchanges/okx.md`
+- `docs/exchanges/coinbase.md`
+- `docs/exchanges/kraken.md`
+- `docs/exchanges/kucoin.md`
+- `docs/exchanges/gateio.md`
+- `docs/exchanges/mexc.md`
+- `docs/exchanges/bitfinex.md`
+
+Read the relevant file and walk them through it step by step. Tell them what
+credentials they'll end up with (some exchanges don't use a passphrase).
+
+When they have all their credentials, tell them to type 'ready'.
+
+**[PAUSE]**
+
+---
+
+### All exchanges — create the .env file
 
 Now create the .env file and open it for editing:
 
@@ -77,8 +135,9 @@ Open the .env file for the user to edit:
 - **Windows:** `notepad .env`
 - **Linux:** `nano .env`
 
-Tell them: "I've opened your .env file. Paste in your BitGet API key, secret key,
-and passphrase where indicated. Save the file, then come back and type 'done'."
+Tell them: "I've opened your .env file. Paste in your credentials where indicated.
+If your exchange doesn't use a passphrase, leave that field blank.
+Save the file, then come back and type 'done'."
 
 **[PAUSE — wait for the user to confirm they've saved their credentials]**
 
