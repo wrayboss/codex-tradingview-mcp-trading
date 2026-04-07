@@ -34,9 +34,9 @@ Do you want to set up Wispr Flow? Type 'yes' to open it, or 'skip' to continue w
 **If they say 'yes':**
 
 Open Wispr Flow in their browser:
-- **Mac:** `open https://wisprflow.ai?via=lewisjackson`
-- **Windows:** `start https://wisprflow.ai?via=lewisjackson`
-- **Linux:** `xdg-open https://wisprflow.ai?via=lewisjackson`
+- **Mac:** `open https://wisprflow.ai/r?LEWIS16`
+- **Windows:** `start https://wisprflow.ai/r?LEWIS16`
+- **Linux:** `xdg-open https://wisprflow.ai/r?LEWIS16`
 
 Tell them: "I've opened Wispr Flow. Download it, install it, and come back when it's
 running. Once it's set up you can speak the rest of this setup instead of typing.
