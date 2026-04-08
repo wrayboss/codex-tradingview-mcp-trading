@@ -225,67 +225,108 @@ If it fails, help them troubleshoot before continuing.
 
 ---
 
-## STEP 4 — Build your strategy from a trader's YouTube channel (optional)
+## STEP 4 — Choose your strategy
 
-Tell the user: "Now for your strategy. You can use the example strategy that's already
-in rules.json — that's the van de Poppe and Tone Vays BTC strategy. Or you can build
-your own from any trader's YouTube channel in about two minutes.
+Ask the user:
 
-Would you like to build a custom strategy? Type 'yes' to do that now, or 'skip' to
-use the example."
+"Now for your strategy. You've got three options:
+
+1. **Use the demo strategy** — it's already in rules.json and ready to go. VWAP + RSI(3) + EMA(8) scalping on the 1-minute chart. Good for getting started.
+2. **I already have my own strategy** — tell me what it is and I'll build your rules.json around it.
+3. **Scrape a strategy from a YouTube trader** — pick any trader whose videos you watch. I'll pull their transcripts and extract their strategy automatically using Apify.
+
+Type 1, 2, or 3."
 
 **[PAUSE — wait for their answer]**
 
-**If they say 'skip':** Tell them the example strategy is ready and move to Step 5.
+---
 
-**If they say 'yes':**
+**If they choose 1 (demo strategy):**
 
-Tell them: "We're going to use Apify to pull transcripts from a YouTube channel.
-You'll need a free Apify account."
+Tell them: "The demo strategy is already loaded in rules.json — nothing to do here.
+Move to Step 5."
+
+---
+
+**If they choose 2 (their own strategy):**
+
+Ask: "Describe your strategy — the indicators you use, the conditions for a buy, the
+conditions for a sell, and any risk rules (stop loss %, max risk per trade, etc.)."
+
+**[PAUSE — get their answer]**
+
+Take what they describe and rewrite `rules.json` to reflect it. Confirm with them
+what you've written before saving.
+
+Tell them: "Done — rules.json now reflects your strategy. That's what the safety
+check will use."
+
+---
+
+**If they choose 3 (scrape from YouTube):**
+
+Tell them: "We're going to use Apify to pull transcripts from a YouTube trader's
+channel and extract their strategy automatically. You'll need a free Apify account."
 
 Open Apify in their browser:
 - **Mac:** `open https://apify.com?fpr=3ly3yd`
 - **Windows:** `start https://apify.com?fpr=3ly3yd`
 - **Linux:** `xdg-open https://apify.com?fpr=3ly3yd`
 
-"I've opened Apify. Create your account if you don't have one. Then:
-1. Click your profile menu → Settings → Integrations
-2. Click 'API Keys'
-3. Click '+ Add new key'
-4. Name it 'claude-trading'
-5. Copy the key
+Tell them: "I've opened Apify. Create your account if you don't have one, then come
+back and type 'done'."
 
-Come back and type 'ready' when you have it."
+**[PAUSE — wait for 'done']**
+
+Now walk them through getting their API token:
+
+"Now let's get your API token. Here's exactly how:
+
+1. In Apify, look for the **search / console** on the left-hand side
+2. Click the search icon and type **API**
+3. Click **API tokens**
+4. On the right side, click **Create a new token**
+5. Give it a name — something like 'trading bot'
+6. Click **Create**
+7. Click the **copy button** next to your new token
+
+Type 'ready' when you have it copied."
 
 **[PAUSE]**
 
-Open .env again and add the Apify key:
+Open .env and add the Apify key:
 - **Mac:** `open -e .env`
 - **Windows:** `notepad .env`
 - **Linux:** `nano .env`
 
-"Add this line to your .env file:
+Tell them: "Add this line to your .env file:
 ```
-APIFY_API_KEY=[your key here]
+APIFY_API_KEY=[paste your token here]
 ```
 Save it and type 'done'."
 
 **[PAUSE]**
 
 Now ask: "Which YouTube trader do you want to build your strategy from?
-Give me their channel name or a YouTube URL. (Example: 'Blockchain Backer')"
+Go to their YouTube channel and paste the channel URL here.
+(Example: Blockchain Backer — just paste the URL of their channel page)"
 
 **[PAUSE — get their answer]**
 
-Use the Apify YouTube Transcript Scraper actor to pull transcripts from that channel.
-Endpoint: `https://api.apify.com/v2/acts/streamers~youtube-transcript/runs`
+Tell them: "On it. I'm going to scrape the transcripts of their last 100 videos
+and extract a trading strategy from them. This takes about 10–20 minutes. I'll
+let you know when it's done."
+
+Use the Apify YouTube Transcript Scraper to pull transcripts from that channel URL.
 Use their APIFY_API_KEY from .env.
+API endpoint: `https://api.apify.com/v2/acts/streamers~youtube-transcript/runs`
 
 Once transcripts are returned, extract the trading strategy using the prompt in
 `prompts/01-extract-strategy.md`. Save the output to `rules.json`.
 
-Tell the user: "Done. I've extracted [trader name]'s strategy and saved it to
-rules.json. That's now what your safety check will use."
+Tell the user: "Done. I've extracted [trader name]'s strategy from their transcripts
+and saved it to rules.json. That's now what your safety check will use — their
+conditions, not a generic template."
 
 ---
 
