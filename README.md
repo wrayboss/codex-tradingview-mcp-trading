@@ -60,7 +60,7 @@ For anyone who wants to understand the steps manually, or troubleshoot a specifi
 
 - **TradingView MCP** must already be set up — built in the [first video](https://youtu.be/vIX6ztULs4U)
 - **Claude Code** installed and running
-- **A BitGet account** — [sign up here](https://partner.bitget.com/bg/LewisJackson) for a $1,000 bonus on your first deposit
+- **A BitGet account** — [sign up here]([https://partner.bitget.com/bg/LewisJackson](https://bonus.bitget.com/LewisJackson)) for a $1,000 bonus on your first deposit
 - **Node.js 18+** — check with `node --version`
 
 ---
