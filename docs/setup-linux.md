@@ -54,35 +54,27 @@ Then just type `tv` to launch.
 
 ---
 
-## 3. Configure the MCP
+## 3. Configure The Codex Bridge
 
-In your Claude Code MCP config (`~/.config/Claude/claude_desktop_config.json`):
+For Codex-side tools, install the local bridge from the repo root:
 
-```json
-{
-  "mcpServers": {
-    "tradingview": {
-      "command": "npx",
-      "args": ["-y", "@tradingview/mcp-server"],
-      "env": {
-        "CDP_PORT": "9222"
-      }
-    }
-  }
-}
+```bash
+node codex-mcp/server.js --self-test
 ```
+
+Then register the bridge in Codex's config using the Windows installer as a reference for the expected `codex-mcp/server.js` command. Do not modify Claude Code MCP config unless you are intentionally configuring Claude Code separately.
 
 ---
 
 ## 4. Verify the connection
 
-In Claude Code terminal:
+From the MCP bridge:
 
 ```
 tv_health_check
 ```
 
-If it returns `cdp_connected: true` — you're good. If not:
+If it reports a connected TradingView target, you are ready to open `R_75` or `R_50` on a 15m chart. If not:
 - Confirm TradingView is running with `--remote-debugging-port=9222` (not launched normally)
 - Check nothing else is using port 9222: `lsof -i :9222`
 - Try: `pkill -f TradingView` then relaunch with the flag

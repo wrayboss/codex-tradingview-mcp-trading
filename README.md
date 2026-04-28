@@ -1,277 +1,201 @@
-# Claude + TradingView MCP — Automated Trading
+# Claude + TradingView MCP Trading
 
-> **New to this?** Watch the previous video first — it sets up the TradingView MCP connection this builds on.
+Breakout + retest trading bot for Deriv synthetic indices. The runtime entry point is `bot.js`, with strategy parameters in `rules.json`.
 
-[![How To Connect Claude to TradingView (Insanely Cool)](https://img.youtube.com/vi/vIX6ztULs4U/maxresdefault.jpg)](https://youtu.be/vIX6ztULs4U)
+## Strategy
 
-[![Claude Code + TradingView Now Actually Executes Real Trades](https://img.youtube.com/vi/aDWJ6lLemJU/maxresdefault.jpg)](https://www.youtube.com/watch?v=aDWJ6lLemJU)
+- Supported bot symbols: `VOLATILITY_75` and `VOLATILITY_50`
+- Deriv API symbols: `R_75` and `R_50`
+- Structure timeframe: 1H pivots
+- Entry timeframe: 15m closed bars
+- Setup: breakout close beyond confirmed 1H support/resistance → retest within 6 bars → confirmation candle → EMA50 + RSI14 alignment
+- Execution: Deriv Multiplier contracts (`MULTUP` long, `MULTDOWN` short)
 
----
+No Crash/Boom symbols. `bot.js` refuses to start when `SYMBOL` is not listed in `rules.json`.
 
-## What This Does
+## Setup
 
-**Five things you get from this setup:**
-
-1. **Claude connected to your exchange** — reads your TradingView chart and executes trades on BitGet automatically
-2. **A safety check** — every condition in your strategy must pass before a single trade goes through
-3. **24/7 cloud execution** — deploy to Railway and it runs on a schedule, even when your laptop is closed
-4. **Automatic tax accounting** — every trade logged to `trades.csv` with date, price, fees, and net amount, ready for your accountant
-5. **Free** — no email, no course, no upsell. Everything is in this repo.
-
----
-
-## The One-Shot Prompt
-
-> **This is the thing you paste.** Open Claude Code in this directory, paste the entire contents of [`prompts/02-one-shot-trade.md`](prompts/02-one-shot-trade.md), and Claude will do the rest.
-
-Here's what it does when you run it:
-
-| Step | What Claude does |
-|------|-----------------|
-| 1 | Reads your `rules.json` strategy |
-| 2 | Pulls live price + indicator data from TradingView |
-| 3 | Calculates MACD from raw candle data |
-| 4 | Evaluates market bias (bullish / bearish / neutral) |
-| 4b | Checks trade limits — daily cap and max trade size |
-| 5 | Runs the safety check — every entry condition checked |
-| 6 | Executes the trade via BitGet if all conditions pass |
-| 7 | Logs the trade to `trades.csv` — date, price, fees, net amount (tax-ready) |
-| 8 | Saves full decision log to `safety-check-log.json` |
-
-If anything fails the safety check, it stops and tells you exactly which condition failed and the actual values. No trade goes through unless everything lines up.
-
----
-
-## Getting Started
-
-### Step 1 — Paste the one-shot prompt into Claude Code
-
-Copy the entire contents of [`prompts/02-one-shot-trade.md`](prompts/02-one-shot-trade.md) and paste it into your Claude Code terminal.
-
-That's it. Claude acts as your onboarding agent — it clones the repo, walks you through connecting BitGet, sets your trading preferences, connects TradingView, optionally builds a strategy from a YouTube channel, deploys to Railway, and runs the bot for the first time. Every step is interactive. It pauses when it needs something from you and handles everything else automatically.
-
----
-
-## What's Happening Under the Hood
-
-For anyone who wants to understand the steps manually, or troubleshoot a specific part:
-
-### Prerequisites
-
-- **TradingView MCP** must already be set up — built in the [first video](https://youtu.be/vIX6ztULs4U)
-- **Claude Code** installed and running
-- **A BitGet account** — [sign up here]([https://partner.bitget.com/bg/LewisJackson](https://bonus.bitget.com/LewisJackson)) for a $1,000 bonus on your first deposit
-- **Node.js 18+** — check with `node --version`
-
----
-
-### Clone the repo
-
-**Mac / Linux:**
-```bash
-git clone https://github.com/jackson-video-resources/claude-tradingview-mcp-trading
-cd claude-tradingview-mcp-trading
-```
-
-**Windows:**
 ```powershell
-git clone https://github.com/jackson-video-resources/claude-tradingview-mcp-trading
-cd claude-tradingview-mcp-trading
-```
-
----
-
-### Add your BitGet API credentials
-
-**Mac / Linux:**
-```bash
-cp .env.example .env
-```
-
-**Windows:**
-```powershell
+npm install
 Copy-Item .env.example .env
 ```
 
-Open `.env` and fill in:
+Fill in `.env`:
 
-```
-BITGET_API_KEY=your_api_key_here
-BITGET_SECRET_KEY=your_secret_key_here
-BITGET_PASSPHRASE=your_passphrase_here
-PORTFOLIO_VALUE_USD=1000
-MAX_TRADE_SIZE_USD=100
+```env
+DERIV_API_TOKEN=your_deriv_token_here
+DERIV_APP_ID=129133
+
+# Optional: set one symbol for single-symbol runs.
+# Leave unset to run every symbol in rules.json during loop mode.
+SYMBOL=VOLATILITY_75
+
+# Optional risk overrides. Defaults come from rules.json.
+MULTIPLIER=10
+STAKE_USD=10
+STOP_LOSS_USD=5
 MAX_TRADES_PER_DAY=3
 ```
 
-**Getting your API key:**
+`SYMBOL` accepts `VOLATILITY_75` or `VOLATILITY_50`. Deriv symbols are mapped internally to `R_75` and `R_50`; do not put `R_75`, `R_50`, Crash, or Boom symbols in `.env`.
 
-Step-by-step guides for all supported exchanges:
+## Commands
 
-| Exchange | Guide |
-|----------|-------|
-| BitGet *(used in the video)* | [docs/exchanges/bitget.md](docs/exchanges/bitget.md) |
-| Binance | [docs/exchanges/binance.md](docs/exchanges/binance.md) |
-| Bybit | [docs/exchanges/bybit.md](docs/exchanges/bybit.md) |
-| OKX | [docs/exchanges/okx.md](docs/exchanges/okx.md) |
-| Coinbase Advanced | [docs/exchanges/coinbase.md](docs/exchanges/coinbase.md) |
-| Kraken | [docs/exchanges/kraken.md](docs/exchanges/kraken.md) |
-| KuCoin | [docs/exchanges/kucoin.md](docs/exchanges/kucoin.md) |
-| Gate.io | [docs/exchanges/gateio.md](docs/exchanges/gateio.md) |
-| MEXC | [docs/exchanges/mexc.md](docs/exchanges/mexc.md) |
-| Bitfinex | [docs/exchanges/bitfinex.md](docs/exchanges/bitfinex.md) |
+| Command | What it does |
+| --- | --- |
+| `npm test` | Run the local test suite with no network calls |
+| `npm run dry-run` | Connect to Deriv, evaluate strategy, log decision — no order |
+| `npm run trade` | Single live cycle — evaluate and place order if a signal fires and gates pass |
+| `npm run loop` | Live autonomous mode — runs every 15m bar close indefinitely |
+| `npm run loop:dry` | Autonomous loop without placing orders |
+| `npm run validate-backtest <csv...>` | Check TradingView List of Trades exports against 7 go-live gates |
+| `npm run launch` | Relaunch TradingView Desktop with CDP on port `9222` |
+| `npm run codex:check` | Self-test the Codex MCP bridge |
 
-Two rules that apply to every exchange — **withdrawals OFF, IP whitelist ON**.
+### Dry-Run And Live Flow
 
----
+Use dry-run first:
 
-### Launch TradingView and connect the MCP
+```powershell
+npm run dry-run
+npm run loop:dry
+```
 
-**Mac:**
-```bash
-tv_launch
+Dry-run still requires `DERIV_API_TOKEN` because it fetches live Deriv candles, authorizes the account, and writes a decision to `safety-check-log.json`, but it never places an order.
+
+Before live/demo order placement, validate TradingView backtests:
+
+```powershell
+npm run validate-backtest R_75-export.csv R_50-export.csv
+```
+
+The validator writes `state/backtest-approved.json`. `npm run trade` and `npm run loop` will not place orders until that file contains `approved: true`.
+
+### Autonomous Operation
+
+```powershell
+npm run loop
+```
+
+The bot:
+1. Calculates the next 15m bar close time and sleeps until 2 seconds after it
+2. Connects to Deriv, reconciles any unsettled contracts from the previous cycle
+3. Checks the backtest gate (`state/backtest-approved.json`) and open positions
+4. Fetches 300 HTF bars + 500 LTF bars, runs the full strategy pipeline
+5. Places an order if all filters pass and live gates are approved
+6. Leaves settlement monitoring to the next cycle's reconciliation pass
+7. Disconnects and waits for the next bar
+
+A PID lock (`state/bot.pid`) prevents two instances running at once.
+Stop with `Ctrl+C` — the lock is released on shutdown.
+
+For a blocking one-cycle live run, use `npm run trade`; single-cycle mode monitors an opened contract until Deriv reports settlement and then appends a `SETTLE` row to `trades.csv`.
+
+## Local Artifact Migration
+
+On startup, the bot prepares local runtime files before it reads or writes trading state:
+
+- Existing `trades.csv` files with the old BitGet/BTC schema are renamed to `trades.legacy-YYYYMMDD-HHMMSS.csv`, then a fresh Deriv CSV header is written.
+- Existing `safety-check-log.json` files without the current `schemaVersion` are renamed to `safety-check-log.legacy-YYYYMMDD-HHMMSS.json`, then a fresh empty log is written.
+- `state/` is created locally and ignored by Git. The bot does not create the old shared `state/traded-levels.json`; live fills write per-symbol files such as `state/traded-levels-R_75.json`.
+- If an old shared `state/traded-levels.json` is found, it is migrated to the active symbol's per-symbol file. If that per-symbol file already exists, the shared file is archived instead of being mixed in.
+
+## Backtest Validation
+
+Before live trading, validate Pine Strategy Tester results:
+
+1. Open `pine/breakout_retest_v1.pine` in TradingView on `R_75` (15m chart)
+2. Run Strategy Tester — let it build at least 50 trades
+3. Export: Strategy Tester → export icon → **List of Trades** → save as CSV
+4. Repeat for `R_50`
+5. Run the validator with both exports:
+
+```powershell
+npm run validate-backtest R_75-export.csv R_50-export.csv
+```
+
+The validator checks all 7 go-live gates and writes `state/backtest-approved.json`.
+The bot will not place live orders until `approved: true` is in that file.
+
+### Go-Live Gates
+
+| # | Gate | Threshold |
+| --- | --- | --- |
+| 1 | Net profit after commission | > 0 |
+| 2 | Win rate | ≥ 45% |
+| 3 | Profit factor | ≥ 1.6 |
+| 4 | Max drawdown | ≤ 15% |
+| 5 | Trade count | ≥ 50 per symbol |
+| 6 | Walk-forward degradation (70/30 split) | ≤ 20% |
+| 7 | Demo settled trades with PF | ≥ 50 trades, PF ≥ 1.4 |
+
+Gate 7 is read from `safety-check-log.json` (demo trades placed by the bot itself).
+
+## Codex MCP Bridge
+
+Install the Codex-side bridge:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\codex-mcp\install-codex-config.ps1
+```
+
+The bridge exposes read and dry-run tools by default:
+
+- `tv_health_check` / `tv_get_state` / `tv_list_indicators`
+- `tv_add_indicator` / `tv_remove_indicator`
+- `deriv_account_summary` / `deriv_candles`
+- `strategy_evaluate_dry_run`
+
+Codex live trading is intentionally disabled by default. `CODEX_ALLOW_LIVE_TRADING=true` only reveals the experimental live tool, and that tool still refuses to place orders; use `npm run trade` or `npm run loop` after demo validation for bot execution.
+
+## TradingView Launch And Pine
+
+Start TradingView Desktop with the Chrome DevTools Protocol port before using chart tools:
+
+```powershell
+npm run launch
+```
+
+That script closes any running TradingView process, starts TradingView with `--remote-debugging-port=9222`, and checks `http://localhost:9222/json/version`. If your install path differs, see `docs/setup-windows.md` or edit `launch.ps1`.
+
+After launch, confirm the bridge can see TradingView:
+
+```
 tv_health_check
 ```
 
-**Windows:** See [docs/setup-windows.md](docs/setup-windows.md)
+Then open a 15m chart for `R_75` or `R_50`, paste `pine/breakout_retest_v1.pine` into TradingView's Pine Editor, add it to the chart, and verify Strategy Tester has no Pine errors before exporting the List of Trades CSV.
 
-**Linux:** See [docs/setup-linux.md](docs/setup-linux.md)
+Optional CDP chart helper:
 
-Verify with `tv_health_check` — should return `cdp_connected: true`.
-
----
-
-### Run the bot manually
-
-```bash
-node bot.js
+```powershell
+node scripts/set-chart.js "Volatility 75 Index" 15
+node scripts/set-chart.js "Volatility 50 Index" 15
 ```
-
----
-
-## Deploy to Railway (Run in the Cloud 24/7)
-
-The local setup runs when your laptop is open. Railway lets the bot check for setups around the clock — even while you sleep.
-
-> **Note:** Cloud mode pulls candle data directly from Binance's free market API instead of TradingView. No TradingView Desktop needed in the cloud. The strategy logic and safety check are identical.
-
-### 1. Deploy
-
-```bash
-npm install -g @railway/cli
-railway login
-railway init
-railway up
-```
-
-### 2. Set your environment variables in Railway
-
-Go to your Railway project → Variables and add everything from `.env.example`:
-
-| Variable | Example |
-|----------|---------|
-| `BITGET_API_KEY` | your key |
-| `BITGET_SECRET_KEY` | your secret |
-| `BITGET_PASSPHRASE` | your passphrase |
-| `PORTFOLIO_VALUE_USD` | 1000 |
-| `MAX_TRADE_SIZE_USD` | 100 |
-| `MAX_TRADES_PER_DAY` | 3 |
-| `PAPER_TRADING` | true (set to false when ready) |
-| `SYMBOL` | BTCUSDT |
-| `TIMEFRAME` | 4H |
-
-### 3. Set a cron schedule
-
-In Railway → Settings → Cron Schedule, set how often the bot runs. Recommended:
-
-| Timeframe | Schedule | What it means |
-|-----------|----------|----------------|
-| 4H chart | `0 */4 * * *` | Every 4 hours |
-| 1D chart | `0 9 * * *` | Once a day at 9am UTC |
-| 1H chart | `0 * * * *` | Every hour |
-
-### 4. Start in paper trading mode
-
-`PAPER_TRADING=true` logs every decision but never places real orders. Watch a few days of paper trades, confirm the logic matches what you expect, then flip it to `false`.
-
----
-
-## Build Your Own Strategy (Optional)
-
-The example `rules.json` uses the van de Poppe + Tone Vays BTC strategy. To build one from any trader's public videos:
-
-1. Go to [Apify](https://apify.com?fpr=3ly3yd) and search the actor store for **YouTube Transcript Scraper** — takes about 30 seconds per channel
-2. Paste the output into `prompts/01-extract-strategy.md`
-3. Run that prompt in Claude Code — it generates a `rules.json` tailored to that trader's methodology
-
----
 
 ## Files
 
-| File | What it does |
-|------|-------------|
-| `rules.json` | Your strategy — indicators, entry rules, risk rules |
-| `.env` | Your BitGet credentials (gitignored — never commits) |
-| `prompts/01-extract-strategy.md` | Build rules.json from trader transcripts |
-| `prompts/02-one-shot-trade.md` | **The one-shot prompt — paste this to trade** |
-| `safety-check-log.json` | Auto-generated log of every trade decision |
-| `trades.csv` | Tax-ready trade record — auto-written on every execution |
-| `docs/setup-windows.md` | Windows-specific MCP setup |
-| `docs/setup-linux.md` | Linux-specific MCP setup |
+| File | Purpose |
+| --- | --- |
+| `bot.js` | CLI entry — PID lock, loop timing, multi-symbol, CSV I/O |
+| `src/cycle.js` | Core strategy cycle — injectable, exported for testing |
+| `rules.json` | Strategy schema and tuned parameters |
+| `src/indicators.js` | EMA, RSI, ATR, SMA, pivot helpers |
+| `src/levels.js` | Active support/resistance store |
+| `src/breakoutDetector.js` | Breakout and fakeout filters |
+| `src/retestTracker.js` | Retest state machine |
+| `src/confirmation.js` | Strong candle, pin bar, engulfing checks |
+| `src/riskManager.js` | Daily cap, ATR-to-USD risk conversion |
+| `src/contractMonitor.js` | Post-order polling loop (30s interval, 12h timeout) |
+| `src/derivClient.js` | WebSocket client with retry/backoff |
+| `pine/breakout_retest_v1.pine` | TradingView strategy for backtesting |
+| `scripts/validate-backtest.js` | Gate validator — reads TV CSV, writes backtest-approved.json |
+| `tests/integration.js` | Integration tests — 11 tests, no network calls |
+| `state/backtest-approved.json` | Gate results — must have `approved: true` for live trading |
+| `state/bot.pid` | PID lock — prevents concurrent bot instances |
+| `state/traded-levels-R_75.json` | Levels that produced a V75 trade (not re-armed) |
+| `state/traded-levels-R_50.json` | Levels that produced a V50 trade (not re-armed) |
+| `safety-check-log.json` | Decision log (all cycles) |
+| `trades.csv` | Executed signal log with settlement rows |
 
----
-
-## Tax Accounting
-
-Every trade the bot places is automatically written to `trades.csv` with the columns your accountant needs:
-
-| Column | Description |
-|--------|-------------|
-| Date | ISO date of the trade |
-| Time | UTC time |
-| Exchange | BitGet |
-| Symbol | e.g. BTCUSDT |
-| Side | Buy / Sell |
-| Quantity | Units traded |
-| Price | Price per unit at execution |
-| Total USD | Gross trade value |
-| Fee (est.) | Estimated exchange fee |
-| Net Amount | Total USD minus fee |
-| Order ID | Exchange reference |
-| Mode | Paper / Live |
-
-At tax time: open the file, hand it to your accountant, or import it directly into your accounting software. Nothing to reconstruct.
-
-For a quick summary of your trading activity, run:
-
-```bash
-node bot.js --tax-summary
-```
-
-This prints total trades, volume, and fees paid.
-
----
-
-## Safety
-
-The safety check conditions are not fixed — they come directly from your `rules.json`. If you build a strategy from a YouTube trader's transcripts using the Apify prompt, your safety check will reflect that trader's entry logic. If you use the example strategy, it reflects those conditions. They're yours, not a generic filter.
-
-Every condition in your `entry_rules` must pass before a trade goes through. One fails — nothing happens. The bot tells you exactly which condition failed and the actual value it saw.
-
-Additional guardrails that apply regardless of strategy:
-- Maximum trade size capped at `MAX_TRADE_SIZE_USD` in `.env`
-- Maximum trades per day capped at `MAX_TRADES_PER_DAY` in `.env`
-- Position sizing calculated from your portfolio value — max 1% risk per trade
-- Every decision logged to `safety-check-log.json` with exact indicator values
-- Every executed trade recorded in `trades.csv` for accounting
-
-**This is not financial advice.** Build your strategy properly. Run the backtest. Paper trade before going live. Never put in more than you can afford to lose.
-
----
-
-## Resources
-
-- [First video — Connect Claude to TradingView](https://youtu.be/vIX6ztULs4U)
-- [TradingView MCP repo (first video)](https://github.com/jackson-video-resources/tradingview-mcp-jackson)
-- [Apify](https://apify.com?fpr=3ly3yd) — search actor store for "YouTube Transcript Scraper"
-- [BitGet — $1,000 bonus on first deposit]([https://partner.bitget.com/bg/LewisJackson](https://bonus.bitget.com/LewisJackson))
+This is automation infrastructure, not financial advice. Use demo mode and verify all behavior before risking real money.

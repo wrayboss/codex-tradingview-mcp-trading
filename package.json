@@ -1,17 +1,28 @@
 {
   "name": "claude-tradingview-mcp-trading",
-  "version": "1.0.0",
-  "description": "Automated trading bot — Claude + TradingView strategy + BitGet execution",
+  "version": "2.0.0",
+  "description": "Breakout + Retest trading bot - Claude + TradingView MCP + Deriv execution",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
-    "dev": "node bot.js"
+    "trade": "node bot.js",
+    "loop": "node bot.js --loop",
+    "loop:dry": "node bot.js --loop --dry-run",
+    "dry-run": "node bot.js --dry-run",
+    "codex:mcp": "node codex-mcp/server.js",
+    "codex:check": "node codex-mcp/server.js --self-test",
+    "test": "node tests/run-tests.js",
+    "launch": "powershell -ExecutionPolicy Bypass -File launch.ps1",
+    "validate-backtest": "node scripts/validate-backtest.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^16.4.5",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "ws": "^8.20.0"
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "type": "module"
 }

@@ -1,4 +1,13 @@
 .env
 *.log
-safety-check-log.json
 node_modules/
+.claude/settings.local.json
+
+# Runtime state — local only, not for version control
+safety-check-log.json
+safety-check-log.archive-*.json
+safety-check-log.legacy-*.json
+trades.csv
+trades.legacy-*.csv
+state/
+state-test-*.json

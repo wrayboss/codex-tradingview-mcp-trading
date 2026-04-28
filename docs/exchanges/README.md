@@ -1,32 +1,13 @@
-# API Key Setup — Top 10 Exchanges
+# Legacy Exchange Docs
 
-Step-by-step instructions for creating an API key on each exchange.
+These exchange guides belonged to the old crypto-exchange bot and are not used by the current Deriv breakout-retest bot.
 
-**Two rules that apply to every exchange:**
-- **Withdrawals: OFF** — your bot never needs this permission
-- **IP whitelist: ON** — your key only works from your machine
+Use the root `README.md` and `.env.example` instead. The current runtime uses:
 
-Pick your exchange:
-
-1. [Binance](binance.md)
-2. [BitGet](bitget.md)
-3. [Bybit](bybit.md)
-4. [OKX](okx.md)
-5. [Coinbase Advanced](coinbase.md)
-6. [Kraken](kraken.md)
-7. [KuCoin](kucoin.md)
-8. [Gate.io](gateio.md)
-9. [MEXC](mexc.md)
-10. [Bitfinex](bitfinex.md)
-
-Once you have your key, secret, and passphrase (not all exchanges use a passphrase — check your guide), paste them into your `.env` file:
-
-```
-BITGET_API_KEY=your_key_here
-BITGET_SECRET_KEY=your_secret_here
-BITGET_PASSPHRASE=your_passphrase_here
+```env
+DERIV_API_TOKEN=your_deriv_api_token_here
+DERIV_APP_ID=129133
+SYMBOL=VOLATILITY_75
 ```
 
-Then update `TRADE_MODE` in `.env` to match your exchange account type:
-- `spot` — for regular spot trading accounts
-- `futures` — for perpetuals / futures accounts
+Supported bot symbols are `VOLATILITY_75` and `VOLATILITY_50`, mapped internally to Deriv symbols `R_75` and `R_50`.
