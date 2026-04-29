@@ -6,6 +6,7 @@ Breakout + retest trading bot for Deriv synthetic indices. The runtime entry poi
 
 - Supported bot symbols: `VOLATILITY_75` and `VOLATILITY_50`
 - Deriv API symbols: `R_75` and `R_50`
+- TradingView chart symbols: `DERIV:VOLATILITY_75_INDEX` and `DERIV:VOLATILITY_50_INDEX`
 - Structure timeframe: 1H pivots
 - Entry timeframe: 15m closed bars
 - Setup: breakout close beyond confirmed 1H support/resistance → retest within 6 bars → confirmation candle → EMA50 + RSI14 alignment
@@ -107,10 +108,10 @@ On startup, the bot prepares local runtime files before it reads or writes tradi
 
 Before live trading, validate Pine Strategy Tester results:
 
-1. Open `pine/breakout_retest_v1.pine` in TradingView on `R_75` (15m chart)
+1. Open `pine/breakout_retest_v1.pine` in TradingView on `DERIV:VOLATILITY_75_INDEX` (15m chart)
 2. Run Strategy Tester — let it build at least 50 trades
 3. Export: Strategy Tester → export icon → **List of Trades** → save as CSV
-4. Repeat for `R_50`
+4. Repeat for `DERIV:VOLATILITY_50_INDEX`
 5. Run the validator with both exports:
 
 ```powershell
@@ -167,13 +168,13 @@ After launch, confirm the bridge can see TradingView:
 tv_health_check
 ```
 
-Then open a 15m chart for `R_75` or `R_50`, paste `pine/breakout_retest_v1.pine` into TradingView's Pine Editor, add it to the chart, and verify Strategy Tester has no Pine errors before exporting the List of Trades CSV.
+Then open a 15m chart for `DERIV:VOLATILITY_75_INDEX` or `DERIV:VOLATILITY_50_INDEX`, paste `pine/breakout_retest_v1.pine` into TradingView's Pine Editor, add it to the chart, and verify Strategy Tester has no Pine errors before exporting the List of Trades CSV.
 
 Optional CDP chart helper:
 
 ```powershell
-node scripts/set-chart.js "Volatility 75 Index" 15
-node scripts/set-chart.js "Volatility 50 Index" 15
+node scripts/set-chart.js VOLATILITY_75 15
+node scripts/set-chart.js VOLATILITY_50 15
 ```
 
 ## Files

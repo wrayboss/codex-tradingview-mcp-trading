@@ -14,7 +14,7 @@ import { evaluateTrendFilter } from "../src/trendFilter.js";
 import { RiskManager } from "../src/riskManager.js";
 import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts } from "../src/artifacts.js";
 import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
-import { createCodexTools, normalizeSyntheticSymbol } from "../codex-mcp/tools.js";
+import { createCodexTools, normalizeSyntheticSymbol, normalizeTradingViewSyntheticSymbol } from "../codex-mcp/tools.js";
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -340,6 +340,8 @@ await group("runtime artifacts", () => {
 await group("codex mcp bridge", async () => {
   eq("normalizes V75 to Deriv symbol", normalizeSyntheticSymbol("VOLATILITY_75"), "R_75");
   eq("normalizes V50 to Deriv symbol", normalizeSyntheticSymbol("VOLATILITY_50"), "R_50");
+  eq("normalizes V75 to TradingView chart symbol", normalizeTradingViewSyntheticSymbol("VOLATILITY_75"), "DERIV:VOLATILITY_75_INDEX");
+  eq("normalizes V50 to TradingView chart symbol", normalizeTradingViewSyntheticSymbol("VOLATILITY_50"), "DERIV:VOLATILITY_50_INDEX");
 
   let rejected = false;
   try { normalizeSyntheticSymbol("CRASH_500"); }

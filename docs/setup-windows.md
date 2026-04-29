@@ -72,7 +72,7 @@ From the MCP bridge:
 tv_health_check
 ```
 
-If it reports a connected TradingView target, you are ready to open `R_75` or `R_50` on a 15m chart. If not:
+If it reports a connected TradingView target, you are ready to open `DERIV:VOLATILITY_75_INDEX` or `DERIV:VOLATILITY_50_INDEX` on a 15m chart. If not:
 - Make sure TradingView was launched with the `--remote-debugging-port=9222` flag (not opened normally)
 - Check that nothing else is using port 9222
 - Try closing and relaunching TradingView with `npm run launch`

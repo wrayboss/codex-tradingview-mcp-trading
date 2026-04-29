@@ -11,6 +11,16 @@ import { validateDerivTradeSize } from "../src/tradeConstraints.js";
 
 export { normalizeSyntheticSymbol };
 
+const TRADINGVIEW_SYNTHETIC_SYMBOL_MAP = {
+  R_75: "DERIV:VOLATILITY_75_INDEX",
+  R_50: "DERIV:VOLATILITY_50_INDEX",
+};
+
+export function normalizeTradingViewSyntheticSymbol(symbol) {
+  const normalized = normalizeSyntheticSymbol(symbol);
+  return TRADINGVIEW_SYNTHETIC_SYMBOL_MAP[normalized];
+}
+
 function textSchema(description, properties = {}, required = []) {
   return {
     description,
@@ -164,8 +174,7 @@ function defaultTvClient() {
   const screenshotDir = process.env.CODEX_TV_SCREENSHOT_DIR || "state";
 
   function toTradingViewSymbol(symbol) {
-    const normalized = normalizeSyntheticSymbol(symbol);
-    return normalized.startsWith("DERIV:") ? normalized : `DERIV:${normalized}`;
+    return normalizeTradingViewSyntheticSymbol(symbol);
   }
 
   function resolveScreenshotPath(requestedPath) {

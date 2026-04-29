@@ -1,13 +1,20 @@
 /**
  * One-shot CDP script: set TradingView chart to a given symbol and timeframe.
  * Usage: node scripts/set-chart.js [symbol] [timeframe]
- *   symbol    — e.g. "Volatility 75 Index" (default)
- *   timeframe — e.g. "15" (default)
+ *   symbol    - e.g. VOLATILITY_75, R_75, or Deriv:VOLATILITY_75_INDEX (default)
+ *   timeframe - e.g. "15" (default)
  */
 
 import WebSocket from "ws";
 
-const SYMBOL    = process.argv[2] || "Volatility 75 Index";
+const SYMBOL_MAP = {
+  VOLATILITY_75: "Deriv:VOLATILITY_75_INDEX",
+  R_75: "Deriv:VOLATILITY_75_INDEX",
+  VOLATILITY_50: "Deriv:VOLATILITY_50_INDEX",
+  R_50: "Deriv:VOLATILITY_50_INDEX",
+};
+
+const SYMBOL    = SYMBOL_MAP[process.argv[2]] || process.argv[2] || "Deriv:VOLATILITY_75_INDEX";
 const TIMEFRAME = process.argv[3] || "15";
 const CDP_URL   = "http://localhost:9222";
 
