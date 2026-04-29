@@ -1,0 +1,44 @@
+{
+  "name": "trading-jarvis",
+  "version": "0.1.0",
+  "description": "Codex trading operator workflows for this Deriv and TradingView repo.",
+  "author": {
+    "name": "NewAdmin",
+    "email": "local-only@example.invalid",
+    "url": "https://localhost"
+  },
+  "homepage": "https://localhost/trading-jarvis",
+  "repository": "https://localhost/claude-tradingview-mcp-trading",
+  "license": "UNLICENSED",
+  "keywords": [
+    "tradingview",
+    "deriv",
+    "strategy",
+    "backtest",
+    "manual-trading"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Trading Jarvis",
+    "shortDescription": "Agentic TradingView and Deriv strategy operator.",
+    "longDescription": "A local Codex plugin for chart monitoring, symbol switching, manual-trade analysis, strategy improvement, Pine/backtest workflows, Deriv dry-runs, and gated live execution support in this repository.",
+    "developerName": "NewAdmin",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write",
+      "MCP"
+    ],
+    "websiteURL": "https://localhost/trading-jarvis",
+    "privacyPolicyURL": "https://localhost/privacy",
+    "termsOfServiceURL": "https://localhost/terms",
+    "defaultPrompt": [
+      "Analyze the live V75 chart and give me a trade brief.",
+      "Switch TradingView to V50 15m and check setup quality.",
+      "Improve the strategy, backtest it, and show the gates."
+    ],
+    "brandColor": "#0F766E"
+  }
+}

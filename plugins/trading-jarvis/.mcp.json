@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "trading-jarvis": {
+      "command": "C:/Program Files/nodejs/node.exe",
+      "args": [
+        "codex-mcp/server.js"
+      ],
+      "cwd": "C:/Users/NewAdmin/claude-tradingview-mcp-trading"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "local-trading-operators",
+  "interface": {
+    "displayName": "Local Trading Operators"
+  },
+  "plugins": [
+    {
+      "name": "trading-jarvis",
+      "source": {
+        "source": "local",
+        "path": "./plugins/trading-jarvis"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
