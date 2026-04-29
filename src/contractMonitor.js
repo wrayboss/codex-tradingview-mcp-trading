@@ -1,3 +1,5 @@
+import { appendSettlementCsvRow, applySettlement } from "./artifacts.js";
+
 const DEFAULT_POLL_MS = 30_000;
 const DEFAULT_TIMEOUT_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -10,9 +12,10 @@ const DEFAULT_TIMEOUT_MS = 12 * 60 * 60 * 1000; // 12 hours
 export async function monitorContract(client, contractId, decision, risk, opts = {}) {
   const pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const nowFn = opts.nowFn ?? (() => new Date());
   const start = Date.now();
 
-  console.log(`\n[monitor] Contract ${contractId} — polling every ${pollMs / 1000}s (max ${timeoutMs / 3_600_000}h)`);
+  console.log(`\n[monitor] Contract ${contractId} - polling every ${pollMs / 1000}s (max ${timeoutMs / 3_600_000}h)`);
 
   let interrupted = false;
   const onSignal = () => { interrupted = true; };
@@ -38,14 +41,16 @@ export async function monitorContract(client, contractId, decision, risk, opts =
         console.log(`[monitor] ${elapsedMin}m | sold=${c.is_sold} | pnl=${pnlStr}`);
 
         if (c.is_sold) {
-          decision.outcome = c.profit > 0 ? "win" : "loss";
-          decision.pnl_usd = typeof c.profit === "number" ? c.profit : null;
+          const settlement = applySettlement(decision, c);
           risk.save();
-          console.log(`[monitor] SETTLED — ${decision.outcome.toUpperCase()} | P&L ${pnlStr}`);
-          return { outcome: decision.outcome, pnl: decision.pnl_usd };
+          if (opts.settlementCsvFile) {
+            appendSettlementCsvRow(decision, { filePath: opts.settlementCsvFile, settledAt: nowFn() });
+          }
+          console.log(`[monitor] SETTLED - ${decision.outcome.toUpperCase()} | P&L ${pnlStr}`);
+          return settlement;
         }
       } catch (err) {
-        console.log(`[monitor] Poll error: ${err.message} — retrying`);
+        console.log(`[monitor] Poll error: ${err.message} - retrying`);
       }
     }
   } finally {
@@ -54,7 +59,7 @@ export async function monitorContract(client, contractId, decision, risk, opts =
   }
 
   const reason = interrupted ? "interrupted" : `timeout after ${timeoutMs / 3_600_000}h`;
-  console.log(`[monitor] ${reason}. Contract ${contractId} still open — will reconcile on next run.`);
+  console.log(`[monitor] ${reason}. Contract ${contractId} still open - will reconcile on next run.`);
   return { outcome: null, pnl: null };
 }
 

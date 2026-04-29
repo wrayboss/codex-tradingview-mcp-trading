@@ -1,36 +1,23 @@
 #!/usr/bin/env node
 /**
- * Validate TradingView strategy-tester CSV export against the 7 go-live gates.
+ * Validate TradingView strategy-tester CSV exports against the go-live gates.
  *
  * Usage:
  *   node scripts/validate-backtest.js <tv-export.csv> [<tv-export-2.csv> ...]
  *
- * TradingView exports one file per symbol (R_75, R_50). Pass both to validate
- * the combined trade count gate (gate 5: ≥50 trades per symbol).
- *
- * On success, writes state/backtest-approved.json.
- *
- * Gate definitions (README §Go-Live Gates):
- *   1. Net profit > 0 after commission
- *   2. Win rate ≥ 45%
- *   3. Profit factor ≥ 1.6
- *   4. Max drawdown ≤ 15% (of initial capital)
- *   5. ≥ 50 trades per symbol
- *   6. Walk-forward degradation ≤ 20%  (70% in-sample / 30% out-of-sample PF split)
- *   7. 50 demo signals with profit factor ≥ 1.4  (checked from safety-check-log.json)
+ * The live cycle only trusts state/backtest-approved.json when it contains a
+ * top-level JSON boolean: { "approved": true }.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { createReadStream } from "fs";
-import { createInterface } from "readline";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
+import { pathToFileURL } from "url";
 
-const STATE_DIR = "state";
-const APPROVED_FILE = `${STATE_DIR}/backtest-approved.json`;
-const DEMO_LOG_FILE = "safety-check-log.json";
+const DEFAULT_STATE_DIR = "state";
+const APPROVED_FILE_NAME = "backtest-approved.json";
+const DEFAULT_DEMO_LOG_FILE = "safety-check-log.json";
 
-// ─── Gate thresholds ───────────────────────────────────────────────────────────
-const GATES = {
+export const DEFAULT_GATES = {
   minNetProfit: 0,
   minWinRate: 0.45,
   minProfitFactor: 1.6,
@@ -41,235 +28,361 @@ const GATES = {
   minDemoProfitFactor: 1.4,
 };
 
-// ─── CSV parser ────────────────────────────────────────────────────────────────
-/**
- * TradingView trade-history CSV has a header row followed by data rows.
- * Each CLOSED trade appears as a single row with Profit populated.
- * Rows where Profit is empty are entry-only rows (some TV versions pair them).
- *
- * Columns we rely on (TV 2024 format):
- *   Trade #, Type, Signal, Date/Time, Price, Contracts, Profit, Cumulative Profit, Run-up, Drawdown
- *
- * We handle both comma and tab delimiters, and quoted fields.
- */
-async function parseTvCsv(filePath) {
-  const lines = readFileSync(filePath, "utf8").split(/\r?\n/);
-  if (lines.length < 2) throw new Error(`${filePath}: too few lines`);
+export async function parseTvCsv(filePath) {
+  const text = readFileSync(filePath, "utf8").replace(/^\uFEFF/, "");
+  const rawLines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+  if (rawLines.length < 2) {
+    throw new Error(`${filePath}: too few non-empty lines for a TradingView trade export`);
+  }
 
-  // Detect delimiter
-  const delim = lines[0].includes("\t") ? "\t" : ",";
+  const lines = rawLines[0].trim().toLowerCase().startsWith("sep=")
+    ? rawLines.slice(1)
+    : rawLines;
+  if (lines.length < 2) {
+    throw new Error(`${filePath}: missing data rows after header`);
+  }
 
-  const header = splitCsvRow(lines[0], delim).map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, "_"));
+  const delimiter = detectDelimiter(lines[0]);
+  const originalHeaders = splitDelimitedRow(lines[0], delimiter).map(h => h.trim());
+  const normalizedHeaders = originalHeaders.map(normalizeHeader);
 
-  const col = name => {
-    const idx = header.findIndex(h => h.includes(name));
-    if (idx === -1) throw new Error(`Column "${name}" not found in ${filePath}. Headers: ${header.join(" | ")}`);
-    return idx;
-  };
-
-  const iProfit = col("profit");
-  const iCumProfit = col("cumulative");
-  const iType = col("type");
+  const profitIndex = findColumn({
+    filePath,
+    originalHeaders,
+    normalizedHeaders,
+    label: "Profit",
+    predicate: h => (h === "profit" || h === "net_profit") && !h.includes("cumulative"),
+  });
+  const cumulativeIndex = findColumn({
+    filePath,
+    originalHeaders,
+    normalizedHeaders,
+    label: "Cumulative Profit",
+    required: false,
+    predicate: h => h.includes("cumulative") && h.includes("profit"),
+  });
 
   const trades = [];
+  const invalidRows = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const fields = splitCsvRow(line, delim);
-    const rawProfit = fields[iProfit]?.trim().replace(/[^0-9.\-]/g, "");
-    if (!rawProfit) continue; // skip entry-only rows
+  for (let lineNo = 2; lineNo <= lines.length; lineNo++) {
+    const line = lines[lineNo - 1];
+    const fields = splitDelimitedRow(line, delimiter);
+    const profitCell = fields[profitIndex]?.trim() ?? "";
+    if (!profitCell) continue;
 
-    const profit = parseFloat(rawProfit);
-    if (isNaN(profit)) continue;
+    const profit = parseNumber(profitCell);
+    if (profit == null) {
+      invalidRows.push(`line ${lineNo} Profit=${JSON.stringify(profitCell)}`);
+      continue;
+    }
 
-    const rawCum = fields[iCumProfit]?.trim().replace(/[^0-9.\-]/g, "");
-    const cumProfit = rawCum ? parseFloat(rawCum) : null;
+    let cumProfit = null;
+    if (cumulativeIndex !== -1) {
+      const rawCum = fields[cumulativeIndex]?.trim() ?? "";
+      if (rawCum) {
+        cumProfit = parseNumber(rawCum);
+        if (cumProfit == null) {
+          invalidRows.push(`line ${lineNo} Cumulative Profit=${JSON.stringify(rawCum)}`);
+          continue;
+        }
+      }
+    }
 
     trades.push({ profit, cumProfit });
+  }
+
+  if (invalidRows.length) {
+    throw new Error(`${filePath}: could not parse numeric values (${invalidRows.slice(0, 5).join("; ")})`);
+  }
+  if (!trades.length) {
+    throw new Error(`${filePath}: no closed trades found; export TradingView Strategy Tester -> List of Trades`);
   }
 
   return trades;
 }
 
-function splitCsvRow(line, delim) {
+export function splitDelimitedRow(line, delimiter) {
   const fields = [];
-  let cur = "", inQuote = false;
+  let current = "";
+  let inQuote = false;
+
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
-    if (ch === '"') { inQuote = !inQuote; continue; }
-    if (ch === delim && !inQuote) { fields.push(cur); cur = ""; continue; }
-    cur += ch;
+    const next = line[i + 1];
+    if (ch === '"') {
+      if (inQuote && next === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuote = !inQuote;
+      }
+      continue;
+    }
+    if (ch === delimiter && !inQuote) {
+      fields.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
   }
-  fields.push(cur);
+  fields.push(current);
   return fields;
 }
 
-// ─── Metrics ───────────────────────────────────────────────────────────────────
-function computeMetrics(trades) {
+export function computeMetrics(trades) {
   if (!trades.length) return null;
 
   const wins = trades.filter(t => t.profit > 0);
   const losses = trades.filter(t => t.profit < 0);
-
-  const netProfit = trades.reduce((s, t) => s + t.profit, 0);
+  const netProfit = trades.reduce((sum, trade) => sum + trade.profit, 0);
   const winRate = wins.length / trades.length;
-  const grossWin = wins.reduce((s, t) => s + t.profit, 0);
-  const grossLoss = Math.abs(losses.reduce((s, t) => s + t.profit, 0));
+  const grossWin = wins.reduce((sum, trade) => sum + trade.profit, 0);
+  const grossLoss = Math.abs(losses.reduce((sum, trade) => sum + trade.profit, 0));
   const profitFactor = grossLoss === 0 ? Infinity : grossWin / grossLoss;
 
-  // Max drawdown from cumulative profit curve
-  let peak = 0, maxDrawdown = 0;
-  for (const t of trades) {
-    const cum = t.cumProfit ?? 0;
-    if (cum > peak) peak = cum;
-    const dd = peak > 0 ? (peak - cum) / peak : 0;
-    if (dd > maxDrawdown) maxDrawdown = dd;
+  let running = 0;
+  let peak = 0;
+  let maxDrawdown = 0;
+  for (const trade of trades) {
+    running += trade.profit;
+    const equity = trade.cumProfit ?? running;
+    peak = Math.max(peak, equity);
+    const drawdown = peak > 0 ? (peak - equity) / peak : 0;
+    maxDrawdown = Math.max(maxDrawdown, drawdown);
   }
 
   return { netProfit, winRate, profitFactor, maxDrawdown, tradeCount: trades.length, grossWin, grossLoss };
 }
 
-function walkForwardPF(trades) {
+export function walkForwardPF(trades) {
   const cutoff = Math.floor(trades.length * 0.7);
   const inSample = trades.slice(0, cutoff);
   const outSample = trades.slice(cutoff);
 
   const pfOf = arr => {
-    const wins = arr.filter(t => t.profit > 0).reduce((s, t) => s + t.profit, 0);
-    const losses = Math.abs(arr.filter(t => t.profit < 0).reduce((s, t) => s + t.profit, 0));
-    return losses === 0 ? Infinity : wins / losses;
+    const wins = arr.filter(t => t.profit > 0).reduce((sum, trade) => sum + trade.profit, 0);
+    const losses = Math.abs(arr.filter(t => t.profit < 0).reduce((sum, trade) => sum + trade.profit, 0));
+    return losses === 0 ? (wins > 0 ? Infinity : 0) : wins / losses;
   };
 
   const pfIn = pfOf(inSample);
   const pfOut = pfOf(outSample);
-  const degradation = pfIn === 0 ? 1 : (pfIn - pfOut) / pfIn;
+  let degradation;
+  if (pfIn === Infinity) degradation = pfOut === Infinity ? 0 : 1;
+  else if (pfIn <= 0) degradation = pfOut > 0 ? 0 : 1;
+  else degradation = (pfIn - pfOut) / pfIn;
+
   return { pfIn, pfOut, degradation, inCount: inSample.length, outCount: outSample.length };
 }
 
-// ─── Demo log check (gate 7) ───────────────────────────────────────────────────
-function checkDemoLog() {
-  if (!existsSync(DEMO_LOG_FILE)) return { count: 0, pf: 0 };
-  let history;
-  try { history = JSON.parse(readFileSync(DEMO_LOG_FILE, "utf8")); }
-  catch { return { count: 0, pf: 0 }; }
+export function checkDemoLog(demoLogFile = DEFAULT_DEMO_LOG_FILE) {
+  if (!existsSync(demoLogFile)) return { count: 0, pf: 0 };
 
-  const demoTrades = (history.trades || []).filter(t => t.orderPlaced && t.outcome);
+  let history;
+  try {
+    history = JSON.parse(readFileSync(demoLogFile, "utf8"));
+  } catch {
+    return { count: 0, pf: 0 };
+  }
+
+  const demoTrades = (history.trades || [])
+    .map(trade => ({
+      ...trade,
+      outcome: String(trade.outcome || "").toLowerCase(),
+      pnl_usd: parseNumber(String(trade.pnl_usd ?? "")),
+    }))
+    .filter(t => t.orderPlaced && (t.outcome === "win" || t.outcome === "loss"));
   const wins = demoTrades.filter(t => t.outcome === "win");
   const losses = demoTrades.filter(t => t.outcome === "loss");
-  const grossWin = wins.reduce((s, t) => s + Math.abs(t.pnl_usd || 0), 0);
-  const grossLoss = losses.reduce((s, t) => s + Math.abs(t.pnl_usd || 0), 0);
+  const grossWin = wins.reduce((sum, trade) => sum + Math.abs(trade.pnl_usd || 0), 0);
+  const grossLoss = losses.reduce((sum, trade) => sum + Math.abs(trade.pnl_usd || 0), 0);
   const pf = grossLoss === 0 ? (grossWin > 0 ? Infinity : 0) : grossWin / grossLoss;
   return { count: demoTrades.length, pf };
 }
 
-// ─── Gate runner ───────────────────────────────────────────────────────────────
-function runGates(allTrades, perSymbol, demo) {
-  const m = computeMetrics(allTrades);
-  if (!m) return { pass: false, results: [{ gate: "data", pass: false, detail: "No trades parsed" }] };
+export function runGates(allTrades, perSymbol, demo, gates = DEFAULT_GATES) {
+  const metrics = computeMetrics(allTrades);
+  if (!metrics) {
+    return { pass: false, results: [{ gate: "data", label: "Trade data", pass: false, detail: "No trades parsed" }], metrics: null, wf: null };
+  }
 
   const wf = walkForwardPF(allTrades);
-
   const results = [];
+  const addGate = (gate, label, pass, detail) => results.push({ gate, label, pass, detail });
 
-  const gate = (id, label, pass, detail) => results.push({ gate: id, label, pass, detail });
+  addGate(1, "Net profit > 0", metrics.netProfit > gates.minNetProfit, `Net profit: $${metrics.netProfit.toFixed(2)}`);
+  addGate(2, "Win rate >= 45%", metrics.winRate >= gates.minWinRate, `Win rate: ${(metrics.winRate * 100).toFixed(1)}% (${allTrades.filter(t => t.profit > 0).length}/${allTrades.length})`);
+  addGate(3, "Profit factor >= 1.6", metrics.profitFactor >= gates.minProfitFactor, `PF: ${formatRatio(metrics.profitFactor)}`);
+  addGate(4, "Max drawdown <= 15%", metrics.maxDrawdown <= gates.maxDrawdownPct, `Max DD: ${(metrics.maxDrawdown * 100).toFixed(1)}%`);
+  addGate(5, `>= ${gates.minTradesPerSymbol} trades per symbol`, perSymbol.every(s => s.count >= gates.minTradesPerSymbol), perSymbol.map(s => `${s.symbol}: ${s.count} trades`).join(" | "));
+  addGate(6, "Walk-forward degradation <= 20%", wf.degradation <= gates.maxWFDegradation, `PF in-sample ${formatRatio(wf.pfIn)} (${wf.inCount} trades) -> out-of-sample ${formatRatio(wf.pfOut)} (${wf.outCount} trades), degradation ${(wf.degradation * 100).toFixed(1)}%`);
+  addGate(7, `>= ${gates.minDemoSignals} demo signals with PF >= ${gates.minDemoProfitFactor}`, demo.count >= gates.minDemoSignals && demo.pf >= gates.minDemoProfitFactor, `Demo settled: ${demo.count} trades | PF: ${formatRatio(demo.pf)}`);
 
-  gate(1, "Net profit > 0", m.netProfit > GATES.minNetProfit,
-    `Net profit: $${m.netProfit.toFixed(2)}`);
-
-  gate(2, "Win rate ≥ 45%", m.winRate >= GATES.minWinRate,
-    `Win rate: ${(m.winRate * 100).toFixed(1)}% (${allTrades.filter(t => t.profit > 0).length}/${allTrades.length})`);
-
-  gate(3, "Profit factor ≥ 1.6", m.profitFactor >= GATES.minProfitFactor,
-    `PF: ${m.profitFactor === Infinity ? "∞" : m.profitFactor.toFixed(2)}`);
-
-  gate(4, "Max drawdown ≤ 15%", m.maxDrawdown <= GATES.maxDrawdownPct,
-    `Max DD: ${(m.maxDrawdown * 100).toFixed(1)}%`);
-
-  const perSymPasses = perSymbol.every(s => s.count >= GATES.minTradesPerSymbol);
-  gate(5, `≥ ${GATES.minTradesPerSymbol} trades per symbol`, perSymPasses,
-    perSymbol.map(s => `${s.symbol}: ${s.count} trades`).join(" | "));
-
-  gate(6, "Walk-forward degradation ≤ 20%", wf.degradation <= GATES.maxWFDegradation,
-    `PF in-sample ${wf.pfIn === Infinity ? "∞" : wf.pfIn.toFixed(2)} (${wf.inCount} trades) → out-of-sample ${wf.pfOut === Infinity ? "∞" : wf.pfOut.toFixed(2)} (${wf.outCount} trades), degradation ${(wf.degradation * 100).toFixed(1)}%`);
-
-  gate(7, `≥ ${GATES.minDemoSignals} demo signals with PF ≥ ${GATES.minDemoProfitFactor}`,
-    demo.count >= GATES.minDemoSignals && demo.pf >= GATES.minDemoProfitFactor,
-    `Demo settled: ${demo.count} trades | PF: ${demo.pf === Infinity ? "∞" : demo.pf.toFixed(2)}`);
-
-  const allPass = results.every(r => r.pass);
-  return { pass: allPass, results, metrics: m, wf };
+  return { pass: results.every(result => result.pass), results, metrics, wf };
 }
 
-// ─── Main ──────────────────────────────────────────────────────────────────────
-async function main() {
-  const args = process.argv.slice(2);
-  if (!args.length) {
-    console.error("Usage: node scripts/validate-backtest.js <tv-export.csv> [<tv-export-2.csv> ...]");
-    console.error("Export from TradingView → Strategy Tester → Export icon → List of Trades");
-    process.exit(1);
-  }
+export function buildApprovalRecord({ approved, files, results, metrics, wf, demo, now = new Date() }) {
+  return {
+    approved: approved === true,
+    validated_at: now.toISOString(),
+    files,
+    gates: results,
+    metrics: metrics ? {
+      net_profit: round(metrics.netProfit, 2),
+      win_rate: round(metrics.winRate * 100, 2),
+      profit_factor: finiteOrNull(metrics.profitFactor, 3),
+      max_drawdown_pct: round(metrics.maxDrawdown * 100, 2),
+      trade_count: metrics.tradeCount,
+    } : null,
+    walk_forward: wf ? {
+      pf_in_sample: finiteOrNull(wf.pfIn, 3),
+      pf_out_sample: finiteOrNull(wf.pfOut, 3),
+      degradation_pct: round(wf.degradation * 100, 2),
+    } : null,
+    demo: {
+      settled_count: demo.count,
+      profit_factor: finiteOrNull(demo.pf, 3),
+    },
+  };
+}
+
+export async function validateBacktest({
+  files,
+  stateDir = DEFAULT_STATE_DIR,
+  demoLogFile = DEFAULT_DEMO_LOG_FILE,
+  demo = null,
+  gates = DEFAULT_GATES,
+  logger = console,
+  now = new Date(),
+} = {}) {
+  if (!files?.length) throw new Error("No TradingView export files supplied");
 
   const perSymbol = [];
   const allTrades = [];
 
-  for (const file of args) {
-    if (!existsSync(file)) { console.error(`File not found: ${file}`); process.exit(1); }
+  for (const file of files) {
+    if (!existsSync(file)) throw new Error(`File not found: ${file}`);
     const symbol = path.basename(file, path.extname(file));
-    console.log(`\nParsing ${file}...`);
+    logger.log(`\nParsing ${file}...`);
     const trades = await parseTvCsv(file);
-    console.log(`  ${trades.length} closed trades found`);
+    logger.log(`  ${trades.length} closed trades found`);
     perSymbol.push({ symbol, count: trades.length });
     allTrades.push(...trades);
   }
 
-  console.log(`\nTotal trades across all files: ${allTrades.length}`);
+  logger.log(`\nTotal trades across all files: ${allTrades.length}`);
 
-  const demo = checkDemoLog();
-  console.log(`Demo log: ${demo.count} settled trades | PF ${demo.pf === Infinity ? "∞" : demo.pf.toFixed(2)}`);
+  const demoResult = demo ?? checkDemoLog(demoLogFile);
+  logger.log(`Demo log: ${demoResult.count} settled trades | PF ${formatRatio(demoResult.pf)}`);
 
-  const { pass, results, metrics, wf } = runGates(allTrades, perSymbol, demo);
+  const { pass, results, metrics, wf } = runGates(allTrades, perSymbol, demoResult, gates);
+  printResults(results, pass, logger);
 
-  console.log("\n═══════════════════════════════════════════════════════════");
-  console.log("  BACKTEST GO-LIVE GATE RESULTS");
-  console.log("═══════════════════════════════════════════════════════════");
-
-  for (const r of results) {
-    const icon = r.pass ? "✓" : "✗";
-    console.log(`  ${icon} Gate ${r.gate}: ${r.label}`);
-    console.log(`       ${r.detail}`);
-  }
-
-  console.log("───────────────────────────────────────────────────────────");
-  console.log(`  Overall: ${pass ? "ALL GATES PASSED" : "FAILED — do not enable live trading"}`);
-  console.log("═══════════════════════════════════════════════════════════\n");
-
-  if (!existsSync(STATE_DIR)) mkdirSync(STATE_DIR);
-
-  const record = {
+  const record = buildApprovalRecord({
     approved: pass,
-    validated_at: new Date().toISOString(),
-    files: args,
-    gates: results,
-    metrics: metrics ? {
-      net_profit: parseFloat(metrics.netProfit.toFixed(2)),
-      win_rate: parseFloat((metrics.winRate * 100).toFixed(2)),
-      profit_factor: metrics.profitFactor === Infinity ? null : parseFloat(metrics.profitFactor.toFixed(3)),
-      max_drawdown_pct: parseFloat((metrics.maxDrawdown * 100).toFixed(2)),
-      trade_count: metrics.tradeCount,
-    } : null,
-    walk_forward: wf ? {
-      pf_in_sample: wf.pfIn === Infinity ? null : parseFloat(wf.pfIn.toFixed(3)),
-      pf_out_sample: wf.pfOut === Infinity ? null : parseFloat(wf.pfOut.toFixed(3)),
-      degradation_pct: parseFloat((wf.degradation * 100).toFixed(2)),
-    } : null,
-    demo: { settled_count: demo.count, profit_factor: demo.pf === Infinity ? null : parseFloat(demo.pf.toFixed(3)) },
-  };
+    files,
+    results,
+    metrics,
+    wf,
+    demo: demoResult,
+    now,
+  });
 
-  writeFileSync(APPROVED_FILE, JSON.stringify(record, null, 2));
-  console.log(`[log] ${APPROVED_FILE} written (approved: ${pass})`);
+  mkdirSync(stateDir, { recursive: true });
+  const approvalFile = path.join(stateDir, APPROVED_FILE_NAME);
+  writeFileSync(approvalFile, `${JSON.stringify(record, null, 2)}\n`);
+  logger.log(`[log] ${approvalFile} written (approved: ${record.approved})`);
 
-  process.exit(pass ? 0 : 1);
+  return { pass, record, results, metrics, wf, demo: demoResult, approvalFile };
 }
 
-main().catch(err => { console.error(err.message); process.exit(1); });
+function detectDelimiter(headerLine) {
+  const candidates = [",", "\t", ";"];
+  return candidates
+    .map(delimiter => ({ delimiter, count: splitDelimitedRow(headerLine, delimiter).length }))
+    .sort((a, b) => b.count - a.count)[0].delimiter;
+}
+
+function normalizeHeader(header) {
+  return header
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, "")
+    .replace(/[%$]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function findColumn({ filePath, originalHeaders, normalizedHeaders, label, predicate, required = true }) {
+  const index = normalizedHeaders.findIndex(predicate);
+  if (index !== -1 || !required) return index;
+  throw new Error(`${filePath}: Missing required column "${label}". Available headers: ${originalHeaders.join(" | ")}`);
+}
+
+function parseNumber(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const negativeByParens = /^\(.*\)$/.test(trimmed);
+  const normalized = trimmed
+    .replace(/\u2212/g, "-")
+    .replace(/,/g, "")
+    .replace(/[^0-9.+-]/g, "");
+  if (!normalized || normalized === "-" || normalized === "." || normalized === "+") return null;
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed)) return null;
+  return negativeByParens ? -Math.abs(parsed) : parsed;
+}
+
+function printResults(results, pass, logger) {
+  logger.log("\n============================================================");
+  logger.log("  BACKTEST GO-LIVE GATE RESULTS");
+  logger.log("============================================================");
+  for (const result of results) {
+    const icon = result.pass ? "PASS" : "FAIL";
+    logger.log(`  ${icon} Gate ${result.gate}: ${result.label}`);
+    logger.log(`       ${result.detail}`);
+  }
+  const failed = results.filter(result => !result.pass);
+  if (failed.length) {
+    logger.error(`\nFailed gates: ${failed.map(result => result.gate).join(", ")}. Live trading remains blocked.`);
+  }
+  logger.log("------------------------------------------------------------");
+  logger.log(`  Overall: ${pass ? "ALL GATES PASSED" : "FAILED - do not enable live trading"}`);
+  logger.log("============================================================\n");
+}
+
+function formatRatio(value) {
+  return value === Infinity ? "Infinity" : value.toFixed(2);
+}
+
+function finiteOrNull(value, places) {
+  return Number.isFinite(value) ? round(value, places) : null;
+}
+
+function round(value, places) {
+  return Number.parseFloat(value.toFixed(places));
+}
+
+async function main() {
+  const files = process.argv.slice(2);
+  if (!files.length) {
+    console.error("Usage: node scripts/validate-backtest.js <tv-export.csv> [<tv-export-2.csv> ...]");
+    console.error("Export TradingView Strategy Tester -> List of Trades, then pass the CSV or TSV file path.");
+    return 1;
+  }
+
+  try {
+    const result = await validateBacktest({ files });
+    return result.pass ? 0 : 1;
+  } catch (err) {
+    console.error("\nBacktest validation failed before gate approval.");
+    console.error(err.message);
+    console.error("Live trading remains blocked until this command completes with approved: true.");
+    return 1;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const exitCode = await main();
+  process.exit(exitCode);
+}

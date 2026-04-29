@@ -10,7 +10,7 @@
 
 import "dotenv/config";
 import { writeFileSync, existsSync, readFileSync, appendFileSync, mkdirSync, unlinkSync } from "fs";
-import { CSV_FILE, CSV_HEADERS, STATE_DIR, prepareRuntimeArtifacts } from "./src/artifacts.js";
+import { CSV_FILE, CSV_HEADERS, STATE_DIR, appendSettlementCsvRow, prepareRuntimeArtifacts } from "./src/artifacts.js";
 import { loadRules }       from "./src/rulesLoader.js";
 import { RiskManager }     from "./src/riskManager.js";
 import { runCycle }        from "./src/cycle.js";
@@ -85,24 +85,6 @@ function appendCsv(decision) {
     "",
     "",
     `"${(decision.notes || "").replace(/[\r\n]+/g, " ").replace(/"/g, '""')}"`,
-  ].join(",");
-  appendFileSync(CSV_FILE, row + "\n");
-}
-
-function appendCsvSettlement(decision) {
-  const t = new Date();
-  const row = [
-    t.toISOString().slice(0, 10),
-    t.toISOString().slice(11, 19),
-    "Deriv",
-    decision.symbol,
-    decision.side || "",
-    "", "", "", "",
-    decision.contractId || "",
-    "SETTLE",
-    decision.outcome || "",
-    decision.pnl_usd != null ? Number(decision.pnl_usd).toFixed(2) : "",
-    `"settled"`,
   ].join(",");
   appendFileSync(CSV_FILE, row + "\n");
 }
@@ -182,6 +164,7 @@ async function main() {
     dryRun: DRY_RUN,
     monitorSettlement,
     stateDir: STATE_DIR,
+    settlementCsvFile: monitorSettlement ? null : CSV_FILE,
   });
 
   try {
@@ -203,7 +186,6 @@ async function main() {
             // In loop mode, no settlement monitor — reconcile handles outcomes next cycle
             const decision = await runCycle(config, rules, risk, cycleOpts(false));
             if (decision?.side    != null) appendCsv(decision);
-            if (decision?.outcome != null) appendCsvSettlement(decision);
           } catch (err) {
             console.error(`[loop] ${symbol} cycle error: ${err.message} — continuing`);
           }
@@ -220,7 +202,7 @@ async function main() {
       if (decision) {
         if (decision.side != null) appendCsv(decision);
         if (decision.outcome) {
-          appendCsvSettlement(decision);
+          appendSettlementCsvRow(decision, { filePath: CSV_FILE });
           console.log(`[log] trades.csv settlement row appended`);
         }
       }

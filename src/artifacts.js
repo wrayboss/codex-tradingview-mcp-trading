@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { dirname, extname, basename, join } from "path";
 
 export const STATE_DIR = "state";
@@ -84,4 +84,42 @@ export function prepareRuntimeArtifacts({
     csv: prepareTradeCsv(csvFile),
     safetyLog: prepareSafetyLog(safetyLogFile),
   };
+}
+
+export function parseSettlementProfit(value) {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value).replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function applySettlement(decision, contract) {
+  const pnl = parseSettlementProfit(contract?.profit);
+  decision.outcome = pnl != null && pnl > 0 ? "win" : "loss";
+  decision.pnl_usd = pnl;
+  return { outcome: decision.outcome, pnl };
+}
+
+export function appendSettlementCsvRow(decision, { filePath = CSV_FILE, settledAt = new Date() } = {}) {
+  prepareTradeCsv(filePath);
+  const t = settledAt instanceof Date ? settledAt : new Date(settledAt);
+  const row = [
+    t.toISOString().slice(0, 10),
+    t.toISOString().slice(11, 19),
+    "Deriv",
+    csvCell(decision.symbol),
+    csvCell(decision.side || ""),
+    "", "", "", "",
+    csvCell(decision.contractId || ""),
+    "SETTLE",
+    csvCell(decision.outcome || ""),
+    decision.pnl_usd != null ? Number(decision.pnl_usd).toFixed(2) : "",
+    csvCell("settled"),
+  ].join(",");
+  appendFileSync(filePath, row + "\n");
+}
+
+export function csvCell(value) {
+  const text = String(value ?? "");
+  if (!/[",\r\n]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""').replace(/[\r\n]+/g, " ")}"`;
 }

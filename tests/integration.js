@@ -5,8 +5,9 @@
  * Exported so run-tests.js can register them.
  */
 
-import { mkdirSync, writeFileSync, existsSync, unlinkSync, rmSync } from "fs";
+import { mkdirSync, writeFileSync, existsSync, readFileSync, unlinkSync, rmSync } from "fs";
 import { runCycle, reconcileUnsettled, placeOrderWithRetry } from "../src/cycle.js";
+import { monitorContract } from "../src/contractMonitor.js";
 import { RiskManager } from "../src/riskManager.js";
 import { loadRules }   from "../src/rulesLoader.js";
 
@@ -337,6 +338,53 @@ export const integrationTests = [
       await reconcileUnsettled(risk, client);
       eq("outcome updated to win", trade.outcome, "win");
       eq("pnl_usd set correctly", trade.pnl_usd, 7.5);
+    },
+  },
+
+  {
+    name: "monitorContract — records string Deriv profit and settlement CSV row",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-monitor`;
+      const logFile = `${dir}/safety-check-log.json`;
+      const csvFile = `${dir}/trades.csv`;
+      try {
+        mkdirSync(dir, { recursive: true });
+        const risk = makeRisk(logFile);
+        const decision = {
+          timestamp: "2026-04-28T12:00:00.000Z",
+          symbol: "VOLATILITY_75",
+          side: "long",
+          stakeUsd: 10,
+          multiplier: 10,
+          slUsd: 3,
+          tpUsd: 6,
+          contractId: "C777",
+          mode: "LIVE",
+          orderPlaced: true,
+          outcome: null,
+          pnl_usd: null,
+          notes: "Filled @ proposal P777",
+        };
+        risk.recordDecision(decision);
+
+        const client = {
+          contractStatus: async () => ({ proposal_open_contract: { is_sold: true, profit: "7.50" } }),
+        };
+
+        const result = await monitorContract(client, "C777", decision, risk, {
+          pollMs: 0,
+          timeoutMs: 1000,
+          settlementCsvFile: csvFile,
+          nowFn: () => new Date("2026-04-28T12:05:00.000Z"),
+        });
+
+        eq("settlement outcome is win", result.outcome, "win");
+        eq("settlement pnl is numeric", result.pnl, 7.5);
+        const saved = JSON.parse(readFileSync(logFile, "utf8"));
+        eq("history saved numeric pnl", saved.trades[0].pnl_usd, 7.5);
+        const csv = readFileSync(csvFile, "utf8");
+        truthy("settlement row includes SETTLE mode", csv.includes(",SETTLE,win,7.50,"));
+      } finally { cleanTmp(dir); }
     },
   },
 

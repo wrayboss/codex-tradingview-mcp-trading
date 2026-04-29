@@ -14,7 +14,7 @@
  */
 
 import { writeFileSync, existsSync, readFileSync, mkdirSync, renameSync } from "fs";
-import { archiveFile }          from "./artifacts.js";
+import { appendSettlementCsvRow, applySettlement, archiveFile } from "./artifacts.js";
 import { DerivClient }          from "./derivClient.js";
 import { findPivots }           from "./pivots.js";
 import { LevelStore }           from "./levels.js";
@@ -29,7 +29,7 @@ import { monitorContract }      from "./contractMonitor.js";
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ─── Reconcile ─────────────────────────────────────────────────────────────────
-export async function reconcileUnsettled(risk, client) {
+export async function reconcileUnsettled(risk, client, opts = {}) {
   const unsettled = risk.history.trades.filter(t => t.orderPlaced && !t.outcome && t.contractId);
   if (!unsettled.length) return;
   console.log(`[reconcile] Checking ${unsettled.length} unsettled contract(s)...`);
@@ -39,8 +39,10 @@ export async function reconcileUnsettled(risk, client) {
       const r = await client.contractStatus(trade.contractId);
       const c = r?.proposal_open_contract;
       if (c?.is_sold) {
-        trade.outcome  = c.profit > 0 ? "win" : "loss";
-        trade.pnl_usd  = c.profit;
+        applySettlement(trade, c);
+        if (opts.settlementCsvFile) {
+          appendSettlementCsvRow(trade, { filePath: opts.settlementCsvFile, settledAt: opts.nowFn?.() ?? new Date() });
+        }
         updated++;
       }
     } catch { /* still open or network error — retry next cycle */ }
@@ -80,6 +82,8 @@ export async function runCycle(config, rules, risk, opts = {}) {
     stateDir          = "state",
     clientFactory     = ({ apiToken, appId }) => new DerivClient({ apiToken, appId }),
     nowFn             = () => new Date(),
+    settlementCsvFile = null,
+    monitorOptions    = {},
   } = opts;
 
   const { symbol, derivSymbol, stakeUsd, multiplier, apiToken, appId } = config;
@@ -91,7 +95,7 @@ export async function runCycle(config, rules, risk, opts = {}) {
   const account = await client.authorize();
   console.log(`[deriv] ${account.email} - ${account.is_virtual ? "DEMO" : "LIVE"} | ${account.currency} ${account.balance}`);
 
-  await reconcileUnsettled(risk, client);
+  await reconcileUnsettled(risk, client, { settlementCsvFile, nowFn });
 
   // Session gate
   const session = rules.session ?? { utc_start_hour: 0, utc_end_hour: 24 };
@@ -303,7 +307,11 @@ export async function runCycle(config, rules, risk, opts = {}) {
   console.log("===========================================================\n");
 
   if (monitorSettlement && decision.orderPlaced && !dryRun) {
-    await monitorContract(client, decision.contractId, decision, risk);
+    await monitorContract(client, decision.contractId, decision, risk, {
+      ...monitorOptions,
+      settlementCsvFile,
+      nowFn,
+    });
   }
 
   client.close();
