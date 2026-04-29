@@ -1,6 +1,10 @@
 import "dotenv/config";
 import { spawn } from "child_process";
+import { existsSync, mkdirSync, writeFileSync } from "fs";
+import path from "path";
 import WebSocket from "ws";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { DerivClient } from "../src/derivClient.js";
 import { normalizeSyntheticSymbol } from "../src/symbols.js";
 
@@ -18,8 +22,156 @@ function textSchema(description, properties = {}, required = []) {
   };
 }
 
+const EXTERNAL_TRADINGVIEW_MCP_PATH = process.env.CODEX_TRADINGVIEW_MCP_SERVER
+  || "C:/Users/NewAdmin/tradingview-mcp/src/server.js";
+
+const EXTERNAL_TRADINGVIEW_TOOL_NAMES = [
+  "tv_health_check",
+  "tv_discover",
+  "tv_ui_state",
+  "tv_launch",
+  "chart_get_state",
+  "chart_set_symbol",
+  "chart_set_timeframe",
+  "chart_set_type",
+  "chart_manage_indicator",
+  "chart_get_visible_range",
+  "chart_set_visible_range",
+  "chart_scroll_to_date",
+  "symbol_info",
+  "symbol_search",
+  "pine_get_source",
+  "pine_set_source",
+  "pine_compile",
+  "pine_get_errors",
+  "pine_save",
+  "pine_get_console",
+  "pine_smart_compile",
+  "pine_new",
+  "pine_open",
+  "pine_list_scripts",
+  "pine_analyze",
+  "pine_check",
+  "data_get_ohlcv",
+  "data_get_indicator",
+  "data_get_strategy_results",
+  "data_get_trades",
+  "data_get_equity",
+  "quote_get",
+  "depth_get",
+  "data_get_pine_lines",
+  "data_get_pine_labels",
+  "data_get_pine_tables",
+  "data_get_pine_boxes",
+  "data_get_study_values",
+  "capture_screenshot",
+  "draw_shape",
+  "draw_list",
+  "draw_clear",
+  "draw_remove_one",
+  "draw_get_properties",
+  "alert_create",
+  "alert_list",
+  "alert_delete",
+  "batch_run",
+  "replay_start",
+  "replay_step",
+  "replay_autoplay",
+  "replay_stop",
+  "replay_trade",
+  "replay_status",
+  "indicator_set_inputs",
+  "indicator_toggle_visibility",
+  "watchlist_get",
+  "watchlist_add",
+  "ui_click",
+  "ui_open_panel",
+  "ui_fullscreen",
+  "layout_list",
+  "layout_switch",
+  "ui_keyboard",
+  "ui_type_text",
+  "ui_hover",
+  "ui_scroll",
+  "ui_mouse_click",
+  "ui_find_element",
+  "ui_evaluate",
+  "pane_list",
+  "pane_set_layout",
+  "pane_focus",
+  "pane_set_symbol",
+  "tab_list",
+  "tab_new",
+  "tab_close",
+  "tab_switch",
+  "morning_brief",
+  "session_save",
+  "session_get",
+];
+
+function defaultExternalTradingViewTools() {
+  if (!existsSync(EXTERNAL_TRADINGVIEW_MCP_PATH)) return [];
+  return EXTERNAL_TRADINGVIEW_TOOL_NAMES.map(name => ({
+    name,
+    description: `Proxy to local tradingview-mcp tool ${name}.`,
+    inputSchema: {
+      type: "object",
+      properties: {},
+      additionalProperties: true,
+    },
+  }));
+}
+
+function parseMcpTextContent(result) {
+  const text = result?.content
+    ?.filter(item => item.type === "text")
+    .map(item => item.text)
+    .join("\n");
+  if (!text) return result;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+async function defaultExternalTradingViewCaller(name, args = {}) {
+  if (!existsSync(EXTERNAL_TRADINGVIEW_MCP_PATH)) {
+    throw new Error(`External TradingView MCP server not found: ${EXTERNAL_TRADINGVIEW_MCP_PATH}`);
+  }
+  const client = new Client({ name: "codex-tradingview-proxy", version: "1.0.0" });
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [EXTERNAL_TRADINGVIEW_MCP_PATH],
+  });
+  try {
+    await client.connect(transport);
+    const result = await client.callTool({ name, arguments: args });
+    const parsed = parseMcpTextContent(result);
+    if (result.isError) {
+      const message = typeof parsed === "string" ? parsed : parsed?.error || JSON.stringify(parsed);
+      throw new Error(message);
+    }
+    return parsed;
+  } finally {
+    await client.close();
+  }
+}
+
 function defaultTvClient() {
   const baseUrl = process.env.TRADINGVIEW_CDP_URL || "http://127.0.0.1:9222";
+  const screenshotDir = process.env.CODEX_TV_SCREENSHOT_DIR || "state";
+
+  function toTradingViewSymbol(symbol) {
+    const normalized = normalizeSyntheticSymbol(symbol);
+    return normalized.startsWith("DERIV:") ? normalized : `DERIV:${normalized}`;
+  }
+
+  function resolveScreenshotPath(requestedPath) {
+    const target = requestedPath || path.join(screenshotDir, `tradingview-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
+    return path.resolve(process.cwd(), target);
+  }
+
   async function withChartPage(fn) {
     const targetsRes = await fetch(`${baseUrl}/json`);
     if (!targetsRes.ok) throw new Error(`TradingView CDP target list returned HTTP ${targetsRes.status}`);
@@ -53,6 +205,15 @@ function defaultTvClient() {
       }
       return result.result.value;
     };
+    const navigate = async (url) => {
+      await send("Page.enable");
+      await send("Page.navigate", { url });
+    };
+    const captureScreenshot = async () => {
+      await send("Page.enable");
+      const result = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+      return result.data;
+    };
     const click = async (x, y) => {
       await send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "none" });
       await send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", clickCount: 1 });
@@ -66,6 +227,10 @@ function defaultTvClient() {
       await send("Input.dispatchKeyEvent", { type: "keyDown", modifiers: 2, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
       await send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 2, key: "a", code: "KeyA", windowsVirtualKeyCode: 65 });
     };
+    const pressControlEnter = async () => {
+      await send("Input.dispatchKeyEvent", { type: "keyDown", modifiers: 2, key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+      await send("Input.dispatchKeyEvent", { type: "keyUp", modifiers: 2, key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
+    };
     const insertText = async (text) => {
       await send("Input.insertText", { text });
     };
@@ -73,7 +238,7 @@ function defaultTvClient() {
 
     try {
       await send("Runtime.enable");
-      return await fn({ evaluate, click, pressEscape, pressControlA, insertText, wait });
+      return await fn({ evaluate, navigate, captureScreenshot, click, pressEscape, pressControlA, pressControlEnter, insertText, wait });
     } finally {
       ws.close();
     }
@@ -187,6 +352,75 @@ function defaultTvClient() {
         return { removed, name, remaining };
       });
     },
+    async setChart({ symbol, timeframe = "15" } = {}) {
+      if (!symbol) throw new Error("symbol is required.");
+      const normalizedSymbol = normalizeSyntheticSymbol(symbol);
+      const tvSymbol = toTradingViewSymbol(normalizedSymbol);
+      return withChartPage(async ({ evaluate, navigate, wait }) => {
+        const beforeUrl = await evaluate("location.href");
+        const nextUrl = await evaluate(`(() => {
+          const url = new URL(location.href);
+          url.searchParams.set("symbol", ${JSON.stringify(tvSymbol)});
+          url.searchParams.set("interval", ${JSON.stringify(String(timeframe))});
+          return url.toString();
+        })()`);
+        await navigate(nextUrl);
+        await wait(2500);
+        const afterUrl = await evaluate("location.href");
+        return { symbol: normalizedSymbol, tradingViewSymbol: tvSymbol, timeframe: String(timeframe), beforeUrl, afterUrl };
+      });
+    },
+    async injectPineSource({ source, compile = true } = {}) {
+      if (!source || typeof source !== "string") throw new Error("source is required.");
+      return withChartPage(async ({ evaluate, click, pressControlA, pressControlEnter, insertText, wait }) => {
+        const editor = await evaluate(`(() => {
+          const candidates = [
+            ...document.querySelectorAll('textarea.inputarea, textarea, [contenteditable="true"], .monaco-editor textarea')
+          ].map(el => {
+            const r = el.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + Math.min(r.height / 2, 24), width: r.width, height: r.height, visible: r.width > 0 && r.height > 0 };
+          }).filter(x => x.visible);
+          return candidates.sort((a, b) => (b.width * b.height) - (a.width * a.height))[0] || null;
+        })()`);
+        if (!editor) throw new Error("Pine editor input not found. Open the Pine Editor panel in TradingView first.");
+        await click(editor.x, editor.y);
+        await wait(100);
+        await pressControlA();
+        await insertText(source);
+        await wait(400);
+        if (compile) {
+          await pressControlEnter();
+          await wait(1800);
+        }
+        return { injected: true, compiled: Boolean(compile), sourceLength: source.length };
+      });
+    },
+    async getPineErrors() {
+      return withChartPage(async ({ evaluate }) => {
+        const result = await evaluate(`(() => {
+          const rows = [...document.querySelectorAll('[role="alert"], [class*="error" i], [data-name*="error" i], .tv-dialog, .bottom-widgetbar-content, .pine-editor, body')]
+            .map(el => (el.innerText || el.textContent || '').trim().replace(/\\s+/g, ' '))
+            .filter(Boolean);
+          const messages = [...new Set(rows.flatMap(text => {
+            const matches = text.match(/(?:line\\s+\\d+[^.]*|syntax error[^.]*|cannot compile[^.]*|error[^.]{0,180})/ig);
+            return matches || [];
+          }).map(x => x.trim()))];
+          return { errors: messages, rawText: rows.slice(0, 20).join("\\n").slice(0, 8000) };
+        })()`);
+        return { hasErrors: result.errors.length > 0, errors: result.errors, rawText: result.rawText };
+      });
+    },
+    async captureScreenshot({ path: requestedPath } = {}) {
+      return withChartPage(async ({ captureScreenshot }) => {
+        const data = await captureScreenshot();
+        const outputPath = resolveScreenshotPath(requestedPath);
+        const parent = path.dirname(outputPath);
+        if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
+        const bytes = Buffer.byteLength(data, "base64");
+        writeFileSync(outputPath, Buffer.from(data, "base64"));
+        return { path: outputPath, bytes, mimeType: "image/png" };
+      });
+    },
   };
 }
 
@@ -232,6 +466,8 @@ async function defaultStrategyEvaluator(args = {}) {
 
 export function createCodexTools({
   allowLiveTrading = process.env.CODEX_ALLOW_LIVE_TRADING === "true",
+  externalTradingViewTools = defaultExternalTradingViewTools(),
+  externalTradingViewCaller = defaultExternalTradingViewCaller,
   tvClient = defaultTvClient(),
   derivClientFactory = defaultDerivClientFactory,
   strategyEvaluator = defaultStrategyEvaluator,
@@ -243,6 +479,7 @@ export function createCodexTools({
     toolDefs.set(name, { name, ...definition });
     handlers.set(name, handler);
   };
+  const hasTool = name => toolDefs.has(name);
 
   addTool(
     "tv_health_check",
@@ -279,6 +516,63 @@ export function createCodexTools({
     ),
     async (args) => tvClient.removeIndicator(args),
   );
+
+  addTool(
+    "tv_set_chart",
+    textSchema(
+      "Set the active TradingView chart symbol and timeframe. Synthetic symbols are limited to V75/V50.",
+      {
+        symbol: { type: "string", enum: ["VOLATILITY_75", "VOLATILITY_50", "R_75", "R_50"] },
+        timeframe: { type: "string", default: "15", description: "TradingView interval such as 1, 5, 15, 60, 240, or D." },
+      },
+      ["symbol"],
+    ),
+    async (args) => tvClient.setChart({ ...args, symbol: normalizeSyntheticSymbol(args.symbol), timeframe: String(args.timeframe || "15") }),
+  );
+
+  addTool(
+    "tv_inject_pine_source",
+    textSchema(
+      "Replace Pine Editor contents with provided source and optionally trigger TradingView compile with Ctrl+Enter.",
+      {
+        source: { type: "string" },
+        compile: { type: "boolean", default: true },
+      },
+      ["source"],
+    ),
+    async (args) => tvClient.injectPineSource({ source: args.source, compile: args.compile !== false }),
+  );
+
+  addTool(
+    "tv_get_pine_errors",
+    textSchema("Read visible Pine compile/error messages from the active TradingView chart page."),
+    async () => tvClient.getPineErrors(),
+  );
+
+  addTool(
+    "tv_capture_screenshot",
+    textSchema(
+      "Capture a PNG screenshot of the active TradingView chart page through CDP.",
+      { path: { type: "string", description: "Optional local output path. Defaults under state/." } },
+    ),
+    async (args) => tvClient.captureScreenshot(args),
+  );
+
+  for (const tool of externalTradingViewTools) {
+    if (!tool?.name || hasTool(tool.name)) continue;
+    addTool(
+      tool.name,
+      {
+        description: tool.description || `Proxy to local tradingview-mcp tool ${tool.name}.`,
+        inputSchema: tool.inputSchema || {
+          type: "object",
+          properties: {},
+          additionalProperties: true,
+        },
+      },
+      async (args) => externalTradingViewCaller(tool.name, args),
+    );
+  }
 
   addTool(
     "deriv_account_summary",

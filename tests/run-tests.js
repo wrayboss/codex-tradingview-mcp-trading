@@ -318,13 +318,25 @@ await group("codex mcp bridge", async () => {
   truthy("rejects crash boom symbols", rejected);
 
   const tvCalls = [];
+  const externalCalls = [];
   const tools = createCodexTools({
     allowLiveTrading: false,
+    externalTradingViewTools: [
+      { name: "chart_get_state", description: "external chart state", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+      { name: "pine_get_source", description: "external pine source", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+      { name: "capture_screenshot", description: "external screenshot", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+      { name: "tv_health_check", description: "duplicate should not replace local", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+    ],
+    externalTradingViewCaller: async (name, args) => { externalCalls.push([name, args]); return { proxied: true, name, args }; },
     tvClient: {
       health: async () => ({ connected: true, browser: "TradingView" }),
       listIndicators: async () => ([{ name: "EMA", title: "Moving Average Exponential", rowText: "EMA 9 close" }]),
       addIndicator: async (args) => { tvCalls.push(["add", args]); return { added: true, name: args.name }; },
       removeIndicator: async (args) => { tvCalls.push(["remove", args]); return { removed: 1, name: args.name }; },
+      setChart: async (args) => { tvCalls.push(["setChart", args]); return { symbol: args.symbol, timeframe: args.timeframe }; },
+      injectPineSource: async (args) => { tvCalls.push(["injectPineSource", args]); return { injected: true, sourceLength: args.source.length }; },
+      getPineErrors: async () => ({ hasErrors: true, errors: ["line 10: Syntax error"] }),
+      captureScreenshot: async (args) => { tvCalls.push(["captureScreenshot", args]); return { path: "state/chart.png", bytes: 12 }; },
     },
     derivClientFactory: () => ({
       authorize: async () => ({ loginid: "VR000", is_virtual: true, currency: "USD", balance: 1000 }),
@@ -339,6 +351,13 @@ await group("codex mcp bridge", async () => {
   truthy("lists tv list indicators tool", names.includes("tv_list_indicators"));
   truthy("lists tv add indicator tool", names.includes("tv_add_indicator"));
   truthy("lists tv remove indicator tool", names.includes("tv_remove_indicator"));
+  truthy("lists tv set chart tool", names.includes("tv_set_chart"));
+  truthy("lists pine source injection tool", names.includes("tv_inject_pine_source"));
+  truthy("lists pine errors tool", names.includes("tv_get_pine_errors"));
+  truthy("lists screenshot tool", names.includes("tv_capture_screenshot"));
+  truthy("lists external chart state proxy", names.includes("chart_get_state"));
+  truthy("lists external pine source proxy", names.includes("pine_get_source"));
+  truthy("lists external capture proxy", names.includes("capture_screenshot"));
   truthy("lists deriv account summary tool", names.includes("deriv_account_summary"));
   truthy("lists strategy dry run tool", names.includes("strategy_evaluate_dry_run"));
   eq("live trade tool hidden by default", names.includes("deriv_place_multiplier_trade"), false);
@@ -357,9 +376,52 @@ await group("codex mcp bridge", async () => {
   eq("remove indicator delegates to tv client", removed.removed, 1);
   eq("remove indicator passes name", tvCalls[1][1].name, "EMA");
 
+  const chart = await tools.call("tv_set_chart", { symbol: "VOLATILITY_75", timeframe: "15" });
+  eq("set chart delegates normalized symbol", chart.symbol, "R_75");
+  eq("set chart passes timeframe", tvCalls[2][1].timeframe, "15");
+
+  const injected = await tools.call("tv_inject_pine_source", { source: "//@version=5\nindicator('Test')" });
+  eq("pine injection delegates source", injected.injected, true);
+  eq("pine injection passes source", tvCalls[3][1].source, "//@version=5\nindicator('Test')");
+
+  const pineErrors = await tools.call("tv_get_pine_errors", {});
+  eq("pine errors report hasErrors", pineErrors.hasErrors, true);
+  eq("pine errors include message", pineErrors.errors[0], "line 10: Syntax error");
+
+  const screenshot = await tools.call("tv_capture_screenshot", { path: "state/chart.png" });
+  eq("screenshot delegates path", tvCalls[4][1].path, "state/chart.png");
+  eq("screenshot returns bytes", screenshot.bytes, 12);
+
+  const proxied = await tools.call("chart_get_state", { compact: true });
+  eq("external proxy delegates tool name", externalCalls[0][0], "chart_get_state");
+  eq("external proxy delegates args", externalCalls[0][1].compact, true);
+  eq("external proxy returns payload", proxied.proxied, true);
+
   const account = await tools.call("deriv_account_summary", {});
   eq("account summary redacts token", "apiToken" in account, false);
   eq("account summary login id", account.loginid, "VR000");
+
+  const liveEnabledTools = createCodexTools({
+    allowLiveTrading: true,
+    tvClient: {
+      health: async () => ({}),
+      state: async () => ({}),
+      listIndicators: async () => ([]),
+      addIndicator: async () => ({}),
+      removeIndicator: async () => ({}),
+      setChart: async () => ({}),
+      injectPineSource: async () => ({}),
+      getPineErrors: async () => ({}),
+      captureScreenshot: async () => ({}),
+    },
+    derivClientFactory: () => ({}),
+    strategyEvaluator: async () => ({}),
+  });
+  truthy("live trade tool appears only when explicitly enabled", liveEnabledTools.list().some(t => t.name === "deriv_place_multiplier_trade"));
+  let liveBlocked = false;
+  try { await liveEnabledTools.call("deriv_place_multiplier_trade", { symbol: "VOLATILITY_75", side: "long", stakeUsd: 1, multiplier: 10, stopLossUsd: 1 }); }
+  catch { liveBlocked = true; }
+  truthy("live trade tool remains blocked even when listed", liveBlocked);
 });
 
 // Log rotation
