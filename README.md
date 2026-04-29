@@ -31,13 +31,16 @@ DERIV_APP_ID=129133
 SYMBOL=VOLATILITY_75
 
 # Optional risk overrides. Defaults come from rules.json.
-MULTIPLIER=10
+# Leave MULTIPLIER unset for symbol defaults: VOLATILITY_75=50, VOLATILITY_50=80.
+# If set, it must be valid for every active symbol.
+# MULTIPLIER=50
 STAKE_USD=10
 STOP_LOSS_USD=5
 MAX_TRADES_PER_DAY=3
 ```
 
 `SYMBOL` accepts `VOLATILITY_75` or `VOLATILITY_50`. Deriv symbols are mapped internally to `R_75` and `R_50`; do not put `R_75`, `R_50`, Crash, or Boom symbols in `.env`.
+Deriv multiplier stakes are locally blocked below `$1.00`; old `0.001` lot-size assumptions do not apply to this bot's stake-based multiplier orders.
 
 ## Commands
 

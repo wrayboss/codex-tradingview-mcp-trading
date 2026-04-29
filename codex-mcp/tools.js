@@ -7,6 +7,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { DerivClient } from "../src/derivClient.js";
 import { normalizeSyntheticSymbol } from "../src/symbols.js";
+import { validateDerivTradeSize } from "../src/tradeConstraints.js";
 
 export { normalizeSyntheticSymbol };
 
@@ -636,14 +637,20 @@ export function createCodexTools({
         {
           symbol: { type: "string", enum: ["VOLATILITY_75", "VOLATILITY_50", "R_75", "R_50"] },
           side: { type: "string", enum: ["long", "short"] },
-          stakeUsd: { type: "number" },
-          multiplier: { type: "number" },
+          stakeUsd: { type: "number", minimum: 1 },
+          multiplier: { type: "number", enum: [50, 80, 100, 200, 300, 400, 500, 600, 800] },
           stopLossUsd: { type: "number" },
           takeProfitUsd: { type: "number" },
         },
         ["symbol", "side", "stakeUsd", "multiplier", "stopLossUsd"],
       ),
-      async () => {
+      async (args) => {
+        const validation = validateDerivTradeSize({
+          symbol: args.symbol,
+          stakeUsd: args.stakeUsd,
+          multiplier: args.multiplier,
+        });
+        if (!validation.ok) throw new Error(validation.message);
         throw new Error("Live trading through Codex is intentionally not implemented yet; use npm run trade or Claude Code after demo validation.");
       },
     );

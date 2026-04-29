@@ -24,6 +24,7 @@ This plugin supports manual trading first. It can analyze, monitor, backtest, im
 Use these from repo root:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File .\plugins\trading-jarvis\scripts\install-local-plugin.ps1
 npm test
 npm run codex:check
 npm run launch
@@ -35,6 +36,8 @@ npm run loop
 ```
 
 `npm run dry-run` connects to Deriv and evaluates the strategy without placing orders. `npm run trade` and `npm run loop` can place orders after the repo's live gates pass.
+
+Run the install script when the plugin does not appear in Codex Plugins. It registers the repo-local marketplace in `C:\Users\NewAdmin\.codex\config.toml` and enables `trading-jarvis@local-trading-operators`; restart Codex or open a new session after installation so plugin inventory reloads.
 
 ## Available MCP Tools
 

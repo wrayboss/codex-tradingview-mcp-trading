@@ -28,7 +28,8 @@ Ask the user to fill:
 DERIV_API_TOKEN=your_deriv_api_token_here
 DERIV_APP_ID=129133
 SYMBOL=VOLATILITY_75
-MULTIPLIER=10
+# Leave MULTIPLIER unset for symbol defaults, or use 50 for VOLATILITY_75.
+# MULTIPLIER=50
 STAKE_USD=10
 STOP_LOSS_USD=5
 MAX_TRADES_PER_DAY=3

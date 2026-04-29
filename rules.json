@@ -60,7 +60,10 @@
 
   "execution": {
     "deriv_contract": "MULTIPLIER",
-    "multiplier": 10,
+    "multiplier_by_symbol": {
+      "VOLATILITY_75": 50,
+      "VOLATILITY_50": 80
+    },
     "decision_on": "bar_close"
   }
 }

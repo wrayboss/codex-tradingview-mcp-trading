@@ -15,6 +15,7 @@ import { loadRules }       from "./src/rulesLoader.js";
 import { RiskManager }     from "./src/riskManager.js";
 import { runCycle }        from "./src/cycle.js";
 import { normalizeSyntheticSymbol } from "./src/symbols.js";
+import { describeDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "./src/tradeConstraints.js";
 
 const DRY_RUN   = process.argv.includes("--dry-run");
 const LOOP_MODE = process.argv.includes("--loop");
@@ -90,15 +91,18 @@ function appendCsv(decision) {
 }
 
 // ─── Banner ────────────────────────────────────────────────────────────────────
-function banner(rules, symbols, stakeUsd, multiplier, stopLossUsd, maxTradesDay) {
+function banner(rules, symbols, stakeUsd, multipliersBySymbol, stopLossUsd, maxTradesDay) {
   const mode = [DRY_RUN ? "DRY RUN" : "LIVE", LOOP_MODE ? "LOOP" : "SINGLE"].join(" | ");
+  const multiplierText = symbols.map(symbol => `${symbol}:${multipliersBySymbol[symbol]}x`).join(", ");
+  const constraintText = symbols.map(symbol => `${symbol}: ${describeDerivTradeConstraints(symbol)}`).join(" | ");
   console.log("===========================================================");
   console.log("  Breakout + Retest V1 - Deriv Multipliers");
   console.log(`  ${new Date().toISOString()}`);
   console.log(`  Strategy : ${rules.strategy}`);
   console.log(`  Symbols  : ${symbols.join(", ")}`);
   console.log(`  TF       : structure ${rules.timeframes.structure}m / entry ${rules.timeframes.entry}m`);
-  console.log(`  Stake    : $${stakeUsd} x ${multiplier}x | SL cap $${stopLossUsd}`);
+  console.log(`  Stake    : $${stakeUsd} | Multipliers ${multiplierText} | SL cap $${stopLossUsd}`);
+  console.log(`  Deriv    : ${constraintText}`);
   console.log(`  Max/day  : ${maxTradesDay} trades`);
   console.log(`  Mode     : ${mode}`);
   console.log("===========================================================");
@@ -109,7 +113,6 @@ async function main() {
   const rules = loadRules("./rules.json");
 
   const stakeUsd      = parseFloat(process.env.STAKE_USD        || rules.risk.stake_usd);
-  const multiplier    = parseInt(process.env.MULTIPLIER          || rules.execution.multiplier, 10);
   const stopLossUsd   = parseFloat(process.env.STOP_LOSS_USD     || rules.risk.stop_loss_usd);
   const maxTradesDay  = parseInt(process.env.MAX_TRADES_PER_DAY  || rules.risk.max_trades_per_day, 10);
   const apiToken      = process.env.DERIV_API_TOKEN;
@@ -123,10 +126,6 @@ async function main() {
     console.error(`ERROR: STAKE_USD must be a positive number (got "${process.env.STAKE_USD}")`);
     process.exit(1);
   }
-  if (!Number.isInteger(multiplier) || multiplier <= 0) {
-    console.error(`ERROR: MULTIPLIER must be a positive integer (got "${process.env.MULTIPLIER}")`);
-    process.exit(1);
-  }
 
   // Resolve active symbol list: SYMBOL env var overrides to single symbol
   let symbols = rules.symbols;
@@ -137,6 +136,17 @@ async function main() {
   }
   if (envSymbol) symbols = [envSymbol];
 
+  const multipliersBySymbol = {};
+  for (const symbol of symbols) {
+    const multiplier = resolveMultiplierForSymbol(symbol, process.env.MULTIPLIER, rules);
+    const validation = validateDerivTradeSize({ symbol, stakeUsd, multiplier });
+    if (!validation.ok) {
+      console.error(`ERROR: ${validation.message}`);
+      process.exit(1);
+    }
+    multipliersBySymbol[symbol] = multiplier;
+  }
+
   // Apply env overrides to risk rules
   const riskRules = { ...rules.risk, stop_loss_usd: stopLossUsd, max_trades_per_day: maxTradesDay };
 
@@ -144,7 +154,7 @@ async function main() {
   logArtifactAction("trades.csv", artifacts.csv);
   logArtifactAction("safety-check-log.json", artifacts.safetyLog);
   initCsv();
-  banner(rules, symbols, stakeUsd, multiplier, stopLossUsd, maxTradesDay);
+  banner(rules, symbols, stakeUsd, multipliersBySymbol, stopLossUsd, maxTradesDay);
 
   const risk = new RiskManager(riskRules);
   risk.load();
@@ -180,6 +190,7 @@ async function main() {
 
         for (const symbol of symbols) {
           const derivSymbol = normalizeSyntheticSymbol(symbol);
+          const multiplier = multipliersBySymbol[symbol];
           console.log(`\n[loop] ===== ${symbol} ${new Date().toISOString()} =====`);
           try {
             const config = { symbol, derivSymbol, stakeUsd, multiplier, apiToken, appId };
@@ -195,6 +206,7 @@ async function main() {
       // Single cycle — use SYMBOL env or first symbol
       const symbol      = symbols[0];
       const derivSymbol = normalizeSyntheticSymbol(symbol);
+      const multiplier  = multipliersBySymbol[symbol];
       const config      = { symbol, derivSymbol, stakeUsd, multiplier, apiToken, appId };
 
       // Single-cycle mode: stay alive monitoring the contract until settlement

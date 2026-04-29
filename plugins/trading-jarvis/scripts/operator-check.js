@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "fs";
 import { spawnSync } from "child_process";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(scriptDir, "../../..");
 
 function run(command, args) {
   const result = spawnSync(command, args, {
-    cwd: process.cwd(),
+    cwd: repoRoot,
     encoding: "utf8",
     shell: false,
   });
@@ -17,9 +22,10 @@ function run(command, args) {
 }
 
 function readJson(path) {
-  if (!existsSync(path)) return null;
+  const filePath = resolve(repoRoot, path);
+  if (!existsSync(filePath)) return null;
   try {
-    return JSON.parse(readFileSync(path, "utf8"));
+    return JSON.parse(readFileSync(filePath, "utf8"));
   } catch {
     return { parseError: true };
   }
@@ -28,11 +34,11 @@ function readJson(path) {
 const pkg = readJson("package.json");
 const rules = readJson("rules.json");
 const approval = readJson("state/backtest-approved.json");
-const envExists = existsSync(".env");
+const envExists = existsSync(resolve(repoRoot, ".env"));
 const bridgeCheck = run(process.execPath, ["codex-mcp/server.js", "--self-test"]);
 
 const summary = {
-  repo: process.cwd(),
+  repo: repoRoot,
   package: pkg ? { name: pkg.name, version: pkg.version } : null,
   envFilePresent: envExists,
   supportedSymbols: rules?.symbols || [],

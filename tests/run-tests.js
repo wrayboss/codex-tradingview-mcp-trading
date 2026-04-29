@@ -4,6 +4,7 @@ import { backtestValidatorTests } from "./backtestValidator.js";
 import { emaSeries, rsiSeries, atrSeries, smaSeries, pivotHighAt, pivotLowAt } from "../src/indicators.js";
 import { filterInProgress } from "../src/candleUtils.js";
 import { existsSync, unlinkSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "fs";
+import { spawnSync } from "child_process";
 import { findPivots } from "../src/pivots.js";
 import { LevelStore } from "../src/levels.js";
 import { detectBreakouts } from "../src/breakoutDetector.js";
@@ -12,6 +13,7 @@ import { evaluateConfirmation } from "../src/confirmation.js";
 import { evaluateTrendFilter } from "../src/trendFilter.js";
 import { RiskManager } from "../src/riskManager.js";
 import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts } from "../src/artifacts.js";
+import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
 import { createCodexTools, normalizeSyntheticSymbol } from "../codex-mcp/tools.js";
 
 let pass = 0, fail = 0;
@@ -277,6 +279,32 @@ await group("risk", () => {
 
   // canTrade allowed when no history
   truthy("canTrade allowed (empty history)", r.canTrade(0).allowed);
+});
+
+// Deriv trade constraints
+await group("Deriv trade constraints", () => {
+  eq("V75 minimum stake follows live Deriv multiplier floor", getDerivTradeConstraints("VOLATILITY_75").minStakeUsd, 1);
+  eq("V50 minimum stake follows live Deriv multiplier floor", getDerivTradeConstraints("VOLATILITY_50").minStakeUsd, 1);
+
+  eq("rejects stale V75 0.001 stake", validateDerivTradeSize({ symbol: "VOLATILITY_75", stakeUsd: 0.001, multiplier: 50 }).ok, false);
+  eq("accepts V75 minimum stake", validateDerivTradeSize({ symbol: "VOLATILITY_75", stakeUsd: 1, multiplier: 50 }).ok, true);
+  eq("rejects stale V75 multiplier 10", validateDerivTradeSize({ symbol: "VOLATILITY_75", stakeUsd: 1, multiplier: 10 }).ok, false);
+  eq("rejects stale V50 multiplier 10", validateDerivTradeSize({ symbol: "VOLATILITY_50", stakeUsd: 1, multiplier: 10 }).ok, false);
+  eq("uses V75 default multiplier", resolveMultiplierForSymbol("VOLATILITY_75", undefined), 50);
+  eq("uses V50 default multiplier", resolveMultiplierForSymbol("VOLATILITY_50", undefined), 80);
+});
+
+await group("Trading Jarvis plugin", () => {
+  const pluginDir = "plugins/trading-jarvis";
+  const result = spawnSync(process.execPath, ["scripts/operator-check.js"], {
+    cwd: pluginDir,
+    encoding: "utf8",
+    shell: false,
+  });
+  eq("operator check exits cleanly from plugin cwd", result.status, 0);
+  const output = JSON.parse(result.stdout);
+  eq("operator check resolves repo package from plugin cwd", output.package?.name, "claude-tradingview-mcp-trading");
+  truthy("operator check resolves Codex bridge from plugin cwd", output.codexBridge.ok);
 });
 
 // Local artifact migration/reset

@@ -127,7 +127,7 @@ function makeRisk(logFile = `${TMPDIR}-risk-log.json`) {
 
 const baseConfig = {
   symbol: "VOLATILITY_75", derivSymbol: "R_75",
-  stakeUsd: 10, multiplier: 10,
+  stakeUsd: 10, multiplier: 50,
   apiToken: "demo_token", appId: "1089",
 };
 
@@ -355,7 +355,7 @@ export const integrationTests = [
           symbol: "VOLATILITY_75",
           side: "long",
           stakeUsd: 10,
-          multiplier: 10,
+          multiplier: 50,
           slUsd: 3,
           tpUsd: 6,
           contractId: "C777",
