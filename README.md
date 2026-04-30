@@ -2,6 +2,15 @@
 
 Breakout + retest trading bot for Deriv synthetic indices. The runtime entry point is `bot.js`, with strategy parameters in `rules.json`.
 
+## Agent Posture
+
+For reusable agent instructions and prompt-driven workflows in this repo:
+
+- Use `gpt-5.5` when the host exposes model choice.
+- Work outcome-first and evidence-first: state the intended result, verify it against repo files or live artifacts, and stop with either a verified result or a named blocker.
+- Do not guess about Deriv account state, TradingView chart state, Pine compile status, or backtest approval state.
+- Keep prompt and instruction upgrades narrow. This repo does not call the OpenAI API directly, so model upgrades here should target reusable instructions and prompts, not runtime trading code, unless the user explicitly asks for behavior changes.
+
 ## Strategy
 
 - Supported bot symbols: `VOLATILITY_75` and `VOLATILITY_50`
@@ -74,6 +83,8 @@ npm run validate-backtest R_75-export.csv R_50-export.csv
 ```
 
 The validator writes `state/backtest-approved.json`. `npm run trade` and `npm run loop` will not place orders until that file contains `approved: true`.
+
+For agent-run verification, treat the flow as complete only when the relevant command output or artifact confirms the state being claimed.
 
 ### Autonomous Operation
 
@@ -169,6 +180,8 @@ tv_health_check
 ```
 
 Then open a 15m chart for `DERIV:VOLATILITY_75_INDEX` or `DERIV:VOLATILITY_50_INDEX`, paste `pine/breakout_retest_v1.pine` into TradingView's Pine Editor, add it to the chart, and verify Strategy Tester has no Pine errors before exporting the List of Trades CSV.
+
+This Pine editor step is manual. If it has not been completed in the current session, chart automation and backtest claims should stop at that blocker.
 
 Optional CDP chart helper:
 

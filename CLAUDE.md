@@ -2,6 +2,14 @@
 
 This repo is now a Deriv synthetic-indices breakout + retest bot.
 
+## Operating Posture
+
+- Use `gpt-5.5` when the host exposes model choice for agent work on this repo.
+- Work outcome-first: identify the target result, required evidence, allowed side effects, and stop condition before acting.
+- Verify conclusions against repository files, command output, TradingView state, Deriv account state, or exported backtest artifacts. Do not guess.
+- Keep changes narrow. This repo does not call the OpenAI API directly, so do not add an OpenAI SDK, model wrapper, or provider migration as part of instruction or prompt upgrades.
+- Preserve runtime behavior unless the user explicitly asks for a strategy or execution change.
+
 ## Current Strategy
 
 - Trade only `VOLATILITY_75` and `VOLATILITY_50`.
@@ -25,6 +33,12 @@ npm run launch        # launch TradingView Desktop with CDP on port 9222
 
 Use `npm run dry-run` before live/demo order placement. Dry-run still authorizes Deriv and fetches candles, but it must never place orders.
 Use `npm run loop` for fully autonomous live/demo operation after backtest gates approve.
+
+When reporting results, prefer:
+
+- outcome or blocker first
+- exact checks run second
+- any remaining manual step last
 
 ## Important Files
 
@@ -69,7 +83,7 @@ Use `npm run loop` for fully autonomous live/demo operation after backtest gates
 
 ## Backtest Gate Workflow
 
-1. Run `pine/breakout_retest_v1.pine` Strategy Tester in TradingView on R_75 and R_50 (15m).
+1. Run `pine/breakout_retest_v1.pine` Strategy Tester in TradingView on `DERIV:VOLATILITY_75_INDEX` and `DERIV:VOLATILITY_50_INDEX` (15m).
 2. Export → Strategy Tester → export icon → **List of Trades** → save CSVs.
 3. `npm run validate-backtest R_75.csv R_50.csv`
 4. Validator writes `state/backtest-approved.json` with `approved: true/false`.
@@ -79,7 +93,7 @@ Use `npm run loop` for fully autonomous live/demo operation after backtest gates
 
 1. Run `npm run launch` if TradingView is not already launched with CDP on port `9222`.
 2. `tv_health_check` must report a connected TradingView target.
-3. Open a 15m Deriv chart for `R_75` or `R_50`.
+3. Open a 15m TradingView chart for `DERIV:VOLATILITY_75_INDEX` or `DERIV:VOLATILITY_50_INDEX`.
 4. Optional helper: `node scripts/set-chart.js "Volatility 75 Index" 15`.
 5. Paste `pine/breakout_retest_v1.pine` into TradingView's Pine Editor and add it to the chart.
 6. Verify the Pine script compiles cleanly before exporting Strategy Tester List of Trades CSVs.
@@ -87,6 +101,7 @@ Use `npm run loop` for fully autonomous live/demo operation after backtest gates
 > **One-time manual step:** Steps 5–6 must be performed manually once per session before the bot runs.
 > The file `pine/breakout_retest_v1.pine` is valid Pine Script v6; do NOT edit it via code.
 > After adding it to the chart, confirm TradingView shows no Pine compile errors before proceeding.
+> If this manual step has not been completed, stop there and report it as the current blocker instead of inferring chart readiness.
 
 ## Architecture Notes
 

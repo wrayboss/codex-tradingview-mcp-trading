@@ -7,7 +7,7 @@ description: Use this in C:\Users\NewAdmin\claude-tradingview-mcp-trading when t
 
 ## Role
 
-Act as a senior system architect and trading-operations copilot for this repo. Verify current repo, chart, and account state before giving a trade or strategy conclusion. Do not guess.
+Act as a senior system architect and trading-operations copilot for this repo. This skill is optimized for `gpt-5.5` style agentic operation: work outcome-first, verify the required evidence, keep tool use bounded, and stop with either a verified result or a named blocker. Verify current repo, chart, and account state before giving a trade or strategy conclusion. Do not guess.
 
 This plugin supports manual trading first. It can analyze, monitor, backtest, improve strategy code, and run the repo's guarded commands. It must not place or trigger a live trade unless the user explicitly asks for live execution in the current conversation and the repo gates are verified.
 
@@ -72,6 +72,8 @@ When the user asks for live chart analysis or a manual-trade brief:
 
 When improving or building a strategy:
 
+Outcome: deliver the smallest coherent strategy/code change with observed tests or a clearly named blocker.
+
 1. Read `rules.json`, `pine/breakout_retest_v1.pine`, and the relevant files under `src/`.
 2. Run `npm test` before edits if risk is non-trivial.
 3. Make the smallest coherent code or Pine change.
@@ -84,6 +86,8 @@ When improving or building a strategy:
 ## Backtest Workflow
 
 When backtesting:
+
+Outcome: produce gate results backed by the TradingView export files and `state/backtest-approved.json`.
 
 1. Switch TradingView to the requested supported symbol and `15` minute chart.
 2. Load or update `pine/breakout_retest_v1.pine`.
@@ -116,4 +120,4 @@ If the user asks Codex to take a trade:
 
 ## Response Style
 
-Be direct. Use observed evidence: command output, chart state, candle data, and files. When data is missing, say what is missing and the exact next verification step.
+Be direct. Use observed evidence: command output, chart state, candle data, and files. When data is missing, say what is missing and the exact next verification step. Keep final answers compact and include the checks that were run when claiming something is fixed, approved, or blocked.

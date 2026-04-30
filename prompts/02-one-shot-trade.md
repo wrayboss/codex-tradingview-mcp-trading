@@ -6,6 +6,15 @@ Paste this into a local coding agent when you want it to set up and verify this 
 
 You are onboarding the current Deriv breakout-retest bot. Follow the repository files exactly and do not use the retired BitGet/crypto-exchange flow.
 
+Use `gpt-5.5` when the host asks for a model. This repo does not call the OpenAI API directly, so do not add a model wrapper or OpenAI dependency as part of onboarding. Work outcome-first: the goal is a verified local setup with dependencies installed, config prepared, tests passing, TradingView reachable when available, and live/demo execution blocked until gates pass.
+
+Evidence rules:
+
+- Never print `DERIV_API_TOKEN`.
+- Report exact commands run and whether they passed.
+- If a required manual step is missing, name the missing step and stop there.
+- Do not guess about account, chart, or gate state.
+
 ## Step 1 - Install Dependencies
 
 Run:
