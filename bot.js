@@ -14,8 +14,8 @@ import { CSV_FILE, CSV_HEADERS, STATE_DIR, appendSettlementCsvRow, prepareRuntim
 import { loadRules }       from "./src/rulesLoader.js";
 import { RiskManager }     from "./src/riskManager.js";
 import { runCycle }        from "./src/cycle.js";
-import { normalizeSyntheticSymbol } from "./src/symbols.js";
-import { describeDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "./src/tradeConstraints.js";
+import { describeDerivTradeConstraints } from "./src/tradeConstraints.js";
+import { resolveActiveWatchlist } from "./src/watchlist.js";
 
 const DRY_RUN   = process.argv.includes("--dry-run");
 const LOOP_MODE = process.argv.includes("--loop");
@@ -127,25 +127,19 @@ async function main() {
     process.exit(1);
   }
 
-  // Resolve active symbol list: SYMBOL env var overrides to single symbol
-  let symbols = rules.symbols;
-  const envSymbol = process.env.SYMBOL;
-  if (envSymbol && !rules.symbols.includes(envSymbol)) {
-    console.error(`ERROR: SYMBOL=${envSymbol} not in rules.symbols (${rules.symbols.join(", ")}). Refusing to start.`);
+  let watchlist;
+  try {
+    watchlist = resolveActiveWatchlist({
+      rules,
+      envSymbol: process.env.SYMBOL,
+      stakeUsd,
+      requestedMultiplier: process.env.MULTIPLIER,
+    });
+  } catch (err) {
+    console.error(`ERROR: ${err.message}`);
     process.exit(1);
   }
-  if (envSymbol) symbols = [envSymbol];
-
-  const multipliersBySymbol = {};
-  for (const symbol of symbols) {
-    const multiplier = resolveMultiplierForSymbol(symbol, process.env.MULTIPLIER, rules);
-    const validation = validateDerivTradeSize({ symbol, stakeUsd, multiplier });
-    if (!validation.ok) {
-      console.error(`ERROR: ${validation.message}`);
-      process.exit(1);
-    }
-    multipliersBySymbol[symbol] = multiplier;
-  }
+  const { symbols, multipliersBySymbol } = watchlist;
 
   // Apply env overrides to risk rules
   const riskRules = { ...rules.risk, stop_loss_usd: stopLossUsd, max_trades_per_day: maxTradesDay };
@@ -189,7 +183,7 @@ async function main() {
         await sleep(waitMs);
 
         for (const symbol of symbols) {
-          const derivSymbol = normalizeSyntheticSymbol(symbol);
+          const derivSymbol = watchlist.entries.find(entry => entry.symbol === symbol).derivSymbol;
           const multiplier = multipliersBySymbol[symbol];
           console.log(`\n[loop] ===== ${symbol} ${new Date().toISOString()} =====`);
           try {
@@ -205,7 +199,7 @@ async function main() {
     } else {
       // Single cycle — use SYMBOL env or first symbol
       const symbol      = symbols[0];
-      const derivSymbol = normalizeSyntheticSymbol(symbol);
+      const derivSymbol = watchlist.entries[0].derivSymbol;
       const multiplier  = multipliersBySymbol[symbol];
       const config      = { symbol, derivSymbol, stakeUsd, multiplier, apiToken, appId };
 

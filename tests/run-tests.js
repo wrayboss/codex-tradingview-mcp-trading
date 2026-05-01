@@ -14,6 +14,7 @@ import { evaluateTrendFilter } from "../src/trendFilter.js";
 import { RiskManager } from "../src/riskManager.js";
 import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts } from "../src/artifacts.js";
 import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
+import { getOperatorWatchlist, resolveActiveWatchlist, resolveOperatorSymbol } from "../src/watchlist.js";
 import { createCodexTools, normalizeSyntheticSymbol, normalizeTradingViewSyntheticSymbol } from "../codex-mcp/tools.js";
 
 let pass = 0, fail = 0;
@@ -294,17 +295,50 @@ await group("Deriv trade constraints", () => {
   eq("uses V50 default multiplier", resolveMultiplierForSymbol("VOLATILITY_50", undefined), 80);
 });
 
+await group("operator watchlist", () => {
+  const rules = JSON.parse(readFileSync("rules.json", "utf8"));
+  const watchlist = getOperatorWatchlist();
+  eq("operator watchlist has exactly V75 and V50", watchlist.map(item => item.symbol).join(","), "VOLATILITY_75,VOLATILITY_50");
+  eq("R_50 alias resolves to operator symbol", resolveOperatorSymbol("R_50").symbol, "VOLATILITY_50");
+
+  const all = resolveActiveWatchlist({ rules, stakeUsd: 10 });
+  eq("default active watchlist follows rules.symbols", all.symbols.join(","), "VOLATILITY_75,VOLATILITY_50");
+  eq("V75 multiplier resolved", all.multipliersBySymbol.VOLATILITY_75, 50);
+  eq("V50 multiplier resolved", all.multipliersBySymbol.VOLATILITY_50, 80);
+
+  const single = resolveActiveWatchlist({ rules, envSymbol: "VOLATILITY_75", stakeUsd: 10 });
+  eq("env symbol narrows to one operator symbol", single.symbols.join(","), "VOLATILITY_75");
+
+  let rejectedDerivEnv = false;
+  try { resolveActiveWatchlist({ rules, envSymbol: "R_75", stakeUsd: 10 }); }
+  catch { rejectedDerivEnv = true; }
+  truthy("rejects Deriv symbol in env watchlist", rejectedDerivEnv);
+
+  let rejectedCrypto = false;
+  try { resolveActiveWatchlist({ rules, envSymbol: "BTCUSDT", stakeUsd: 10 }); }
+  catch { rejectedCrypto = true; }
+  truthy("rejects crypto symbols", rejectedCrypto);
+
+  let rejectedCrash = false;
+  try { resolveOperatorSymbol("CRASH_500"); }
+  catch { rejectedCrash = true; }
+  truthy("rejects crash boom symbols", rejectedCrash);
+});
+
 await group("Trading Jarvis plugin", () => {
   const pluginDir = "plugins/trading-jarvis";
   const result = spawnSync(process.execPath, ["scripts/operator-check.js"], {
     cwd: pluginDir,
     encoding: "utf8",
     shell: false,
+    env: { ...process.env, SYMBOL: "", MULTIPLIER: "" },
   });
   eq("operator check exits cleanly from plugin cwd", result.status, 0);
   const output = JSON.parse(result.stdout);
   eq("operator check resolves repo package from plugin cwd", output.package?.name, "claude-tradingview-mcp-trading");
   truthy("operator check resolves Codex bridge from plugin cwd", output.codexBridge.ok);
+  eq("operator check exposes Deriv-only active symbols", output.activeSymbols.join(","), "VOLATILITY_75,VOLATILITY_50");
+  eq("operator check exposes two symbol switch commands", output.symbolSwitchCommands.length, 2);
 });
 
 // Local artifact migration/reset
