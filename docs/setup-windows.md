@@ -12,25 +12,40 @@ From the repo root:
 npm run launch
 ```
 
-That runs `launch.ps1`, closes any existing TradingView process, launches TradingView Desktop with `--remote-debugging-port=9222`, and checks the CDP endpoint.
+That runs `launch.ps1`, discovers the current TradingView Desktop executable from AppX/MSIX package locations, closes any existing TradingView process, launches TradingView Desktop with `--remote-debugging-port=9222`, and checks the CDP endpoint.
 
-If `launch.ps1` cannot find your TradingView executable, use the manual steps below to find the correct path and update `$TV_EXE` in `launch.ps1`.
+If `launch.ps1` cannot find your TradingView executable, use the manual steps below to verify the package path or set a local `TRADINGVIEW_EXE` override. Do not pin the checked-in script to one TradingView package version.
 
 ---
 
-## 2. Find your TradingView executable
+## 2. Verify The TradingView Package
 
-TradingView Desktop on Windows may be installed as an `.msix` package under `WindowsApps` or under the user package cache. Find the exact install location with:
+TradingView Desktop on Windows is usually installed as an AppX/MSIX package. The package version changes over time, so the repo launcher resolves it dynamically instead of storing a fixed `WindowsApps\TradingView.Desktop_<version>` path.
+
+To inspect the installed package:
 
 ```powershell
-Get-AppxPackage -Name "TradingView*" | Select-Object Name, InstallLocation
+Get-AppxPackage -Name "TradingView*" | Select-Object Name, Version, InstallLocation
 ```
 
-Common paths look like:
+Common executable locations look like:
 
 ```
 C:\Program Files\WindowsApps\TradingView.Desktop_...\TradingView.exe
 C:\Users\[YourName]\AppData\Local\Packages\TradingView.TradingViewDesktop_[hash]\LocalCache\Local\TradingView\TradingView.exe
+```
+
+To test what the repo launcher will use without starting TradingView:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\launch.ps1 -ResolveOnly
+```
+
+If TradingView is installed somewhere custom, set a local override for the current PowerShell session:
+
+```powershell
+$env:TRADINGVIEW_EXE = "C:\path\to\TradingView.exe"
+npm run launch
 ```
 
 ---
@@ -46,9 +61,9 @@ Stop-Process -Name "TradingView" -ErrorAction SilentlyContinue
 & "C:\path\to\TradingView.exe" --remote-debugging-port=9222
 ```
 
-Replace the path with the one you found in Step 2.
+Replace the path with the one reported by `.\launch.ps1 -ResolveOnly` or `Get-AppxPackage`.
 
-The checked-in `launch.ps1` is the preferred repeatable version of this command.
+The checked-in `launch.ps1` is the preferred repeatable version of this command because it avoids hard-coded TradingView package versions.
 
 ---
 

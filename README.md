@@ -171,7 +171,7 @@ Start TradingView Desktop with the Chrome DevTools Protocol port before using ch
 npm run launch
 ```
 
-That script closes any running TradingView process, starts TradingView with `--remote-debugging-port=9222`, and checks `http://localhost:9222/json/version`. If your install path differs, see `docs/setup-windows.md` or edit `launch.ps1`.
+That script resolves the installed TradingView Desktop executable from the current Windows AppX/MSIX package location, closes any running TradingView process, starts TradingView with `--remote-debugging-port=9222`, and checks `http://localhost:9222/json/version`. If TradingView is installed outside the normal package paths, see `docs/setup-windows.md` for the `TRADINGVIEW_EXE` override.
 
 After launch, confirm the bridge can see TradingView:
 

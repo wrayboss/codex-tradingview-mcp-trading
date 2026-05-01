@@ -341,6 +341,31 @@ await group("Trading Jarvis plugin", () => {
   eq("operator check exposes two symbol switch commands", output.symbolSwitchCommands.length, 2);
 });
 
+await group("Windows TradingView launcher", () => {
+  const launcher = readFileSync("launch.ps1", "utf8");
+  eq("launcher is not tied to TradingView 3.1.0.7818", launcher.includes("TradingView.Desktop_3.1.0.7818"), false);
+  truthy("launcher discovers AppX install locations", launcher.includes("Get-AppxPackage"));
+  truthy("launcher can resolve without starting TradingView", launcher.includes("ResolveOnly"));
+  truthy("launcher keeps CDP verification on 9222", launcher.includes("$CDP_PORT = 9222") && launcher.includes("/json/version"));
+
+  const dir = "state-test-launcher";
+  try {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const fakeExe = `${process.cwd()}\\${dir}\\TradingView.exe`;
+    writeFileSync(fakeExe, "");
+    const result = spawnSync("powershell", ["-ExecutionPolicy", "Bypass", "-File", "launch.ps1", "-ResolveOnly"], {
+      encoding: "utf8",
+      shell: false,
+      env: { ...process.env, TRADINGVIEW_EXE: fakeExe, TV_EXE: "" },
+    });
+    eq("ResolveOnly exits cleanly with explicit executable", result.status, 0);
+    eq("ResolveOnly prints resolved executable", result.stdout.trim().toLowerCase(), fakeExe.toLowerCase());
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // Local artifact migration/reset
 await group("runtime artifacts", () => {
   const dir = "state-test-artifacts";
