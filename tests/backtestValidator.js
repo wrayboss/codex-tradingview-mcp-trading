@@ -4,6 +4,9 @@ import {
   validateBacktest,
   buildApprovalRecord,
   checkDemoLog,
+  runGates,
+  getValidationExitCode,
+  getOverallStatusText,
 } from "../scripts/validate-backtest.js";
 
 const FIXTURES = "tests/fixtures/backtests";
@@ -90,9 +93,74 @@ export const backtestValidatorTests = [
         now: new Date("2026-04-28T00:00:00.000Z"),
       });
       eq("approved is boolean true", record.approved, true);
+      eq("demoApproved is boolean true", record.demoApproved, true);
+      eq("realApproved is boolean true", record.realApproved, true);
       eq("validated_at is deterministic ISO", record.validated_at, "2026-04-28T00:00:00.000Z");
       eq("trade count copied", record.metrics.trade_count, 50);
+      truthy("approval record includes rules hash fingerprint", typeof record.fingerprint.rules_hash === "string");
+      truthy("approval record includes package hash fingerprint", typeof record.fingerprint.package_hash === "string");
+      truthy("approval record includes validator schema version", record.fingerprint.validator_schema_version >= 2);
       truthy("cycle contract remains JSON-readable", JSON.parse(JSON.stringify(record)).approved === true);
+    },
+  },
+  {
+    name: "demo approval passes gates 1-6 without demo settlement gate",
+    async run(eq, truthy) {
+      const trades = Array.from({ length: 10 }, (_, i) => ({ profit: i % 2 === 0 ? 10 : -2, cumProfit: null }));
+      const result = runGates(trades, [{ symbol: "R_75", count: 10 }], { count: 0, pf: 0 }, {
+        minNetProfit: 0,
+        minWinRate: 0.3,
+        minProfitFactor: 1.0,
+        maxDrawdownPct: 1.0,
+        minTradesPerSymbol: 10,
+        maxWFDegradation: 1.0,
+        minDemoSignals: 50,
+        minDemoProfitFactor: 1.4,
+      });
+      eq("demoApproved true when gates 1-6 pass", result.demoApproved, true);
+      eq("realApproved false when gate 7 fails", result.realApproved, false);
+      eq("overall pass remains real approval", result.pass, false);
+      eq("demo-approved validator exit code is success", getValidationExitCode(result), 0);
+      eq("demo-approved overall wording", getOverallStatusText(result), "DEMO APPROVED - real trading still blocked until gate 7 passes");
+    },
+  },
+  {
+    name: "validator exit code fails when demo approval fails",
+    async run(eq, truthy) {
+      const result = runGates([{ profit: -10, cumProfit: -10 }], [{ symbol: "R_75", count: 1 }], { count: 0, pf: 0 }, {
+        minNetProfit: 0,
+        minWinRate: 0.3,
+        minProfitFactor: 1.0,
+        maxDrawdownPct: 1.0,
+        minTradesPerSymbol: 10,
+        maxWFDegradation: 1.0,
+        minDemoSignals: 50,
+        minDemoProfitFactor: 1.4,
+      });
+      eq("demoApproved false", result.demoApproved, false);
+      eq("validator exit code is failure", getValidationExitCode(result), 1);
+      eq("failed overall wording", getOverallStatusText(result), "FAILED - demo and real trading remain blocked");
+    },
+  },
+  {
+    name: "real approval requires demo settlement gate",
+    async run(eq, truthy) {
+      const trades = Array.from({ length: 10 }, (_, i) => ({ profit: i % 2 === 0 ? 10 : -2, cumProfit: null }));
+      const result = runGates(trades, [{ symbol: "R_75", count: 10 }], { count: 50, pf: 2 }, {
+        minNetProfit: 0,
+        minWinRate: 0.3,
+        minProfitFactor: 1.0,
+        maxDrawdownPct: 1.0,
+        minTradesPerSymbol: 10,
+        maxWFDegradation: 1.0,
+        minDemoSignals: 50,
+        minDemoProfitFactor: 1.4,
+      });
+      eq("demoApproved true", result.demoApproved, true);
+      eq("realApproved true when gate 7 passes", result.realApproved, true);
+      eq("overall pass true", result.pass, true);
+      eq("real-approved validator exit code is success", getValidationExitCode(result), 0);
+      eq("real-approved overall wording", getOverallStatusText(result), "REAL APPROVED - demo and real gates passed");
     },
   },
   {
@@ -144,6 +212,9 @@ export const backtestValidatorTests = [
         truthy("approval file exists", existsSync(`${stateDir}/backtest-approved.json`));
         const saved = JSON.parse(readFileSync(`${stateDir}/backtest-approved.json`, "utf8"));
         eq("saved approved boolean true", saved.approved, true);
+        eq("saved demoApproved boolean true", saved.demoApproved, true);
+        eq("saved realApproved boolean true", saved.realApproved, true);
+        truthy("saved fingerprint includes symbols", Array.isArray(saved.fingerprint.symbols));
         eq("saved file path", saved.files[0], `${FIXTURES}/list-of-trades-standard.csv`);
       } finally {
         rmSync(stateDir, { recursive: true, force: true });

@@ -43,9 +43,45 @@ export class RiskManager {
     return this.history.trades.filter(t => t.timestamp?.startsWith(today) && t.orderPlaced).length;
   }
 
+  todaySettledPnl() {
+    const today = new Date().toISOString().slice(0, 10);
+    return this.history.trades
+      .filter(t => t.timestamp?.startsWith(today) && t.orderPlaced && ["win", "loss"].includes(String(t.outcome || "").toLowerCase()))
+      .map(t => Number(t.pnl_usd))
+      .filter(Number.isFinite)
+      .reduce((sum, pnl) => sum + pnl, 0);
+  }
+
+  consecutiveLosses() {
+    let count = 0;
+    const settled = [...this.history.trades]
+      .reverse()
+      .filter(t => t.orderPlaced && ["win", "loss"].includes(String(t.outcome || "").toLowerCase()) && Number.isFinite(Number(t.pnl_usd)));
+    for (const trade of settled) {
+      const outcome = String(trade.outcome || "").toLowerCase();
+      if (outcome === "win") break;
+      count++;
+    }
+    return count;
+  }
+
   canTrade(candleEpoch) {
     if (this.todayCount() >= this.rules.max_trades_per_day) {
       return { allowed: false, reason: `daily cap (${this.todayCount()}/${this.rules.max_trades_per_day})` };
+    }
+    const maxDailyLoss = Number(this.rules.max_daily_loss_usd);
+    if (Number.isFinite(maxDailyLoss) && maxDailyLoss > 0) {
+      const pnl = this.todaySettledPnl();
+      if (pnl <= -maxDailyLoss) {
+        return { allowed: false, reason: `daily loss cap reached (${pnl.toFixed(2)}/-${maxDailyLoss.toFixed(2)})` };
+      }
+    }
+    const maxConsecutiveLosses = Number(this.rules.max_consecutive_losses);
+    if (Number.isFinite(maxConsecutiveLosses) && maxConsecutiveLosses > 0) {
+      const losses = this.consecutiveLosses();
+      if (losses >= maxConsecutiveLosses) {
+        return { allowed: false, reason: `consecutive loss cap reached (${losses}/${maxConsecutiveLosses})` };
+      }
     }
     const last = [...this.history.trades].reverse().find(t => t.orderPlaced);
     if (last && last.outcome === "loss" && this.rules.cooldown_bars_after_loss > 0) {

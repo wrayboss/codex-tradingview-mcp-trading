@@ -263,6 +263,7 @@ await group("risk", () => {
   const rules = {
     stake_usd: 10, stop_loss_usd: 5, atr_sl_multiplier: 1.5, min_rr: 2,
     max_trades_per_day: 3, cooldown_bars_after_loss: 0,
+    max_daily_loss_usd: 10, max_consecutive_losses: 2,
   };
   const r = new RiskManager(rules);
   r.history = { trades: [] };
@@ -280,6 +281,23 @@ await group("risk", () => {
 
   // canTrade allowed when no history
   truthy("canTrade allowed (empty history)", r.canTrade(0).allowed);
+
+  const today = new Date().toISOString();
+  r.history = { trades: [
+    { timestamp: today, orderPlaced: true, outcome: "loss", pnl_usd: -4 },
+    { timestamp: today, orderPlaced: true, outcome: "loss", pnl_usd: -6 },
+  ] };
+  eq("daily loss cap blocks at threshold", r.canTrade(0).allowed, false);
+  truthy("daily loss cap reason is clear", r.canTrade(0).reason.includes("daily loss cap reached"));
+
+  r.rules = { ...rules, max_trades_per_day: 10, max_daily_loss_usd: 0 };
+  r.history = { trades: [
+    { timestamp: "2026-01-01T00:00:00.000Z", epoch: 0, orderPlaced: true, outcome: "win", pnl_usd: 3 },
+    { timestamp: "2026-01-01T00:15:00.000Z", epoch: 900, orderPlaced: true, outcome: "loss", pnl_usd: -2 },
+    { timestamp: "2026-01-01T00:30:00.000Z", epoch: 1800, orderPlaced: true, outcome: "loss", pnl_usd: -2 },
+  ] };
+  eq("consecutive loss cap blocks at threshold", r.canTrade(7200).allowed, false);
+  truthy("consecutive loss cap reason is clear", r.canTrade(7200).reason.includes("consecutive loss cap reached"));
 });
 
 // Deriv trade constraints
@@ -523,6 +541,7 @@ await group("log rotation", () => {
     const r = new RiskManager({
       stake_usd: 10, stop_loss_usd: 5, atr_sl_multiplier: 1.5, min_rr: 2,
       max_trades_per_day: 3, cooldown_bars_after_loss: 0,
+      max_daily_loss_usd: 0, max_consecutive_losses: 0,
     }, { logFile: `${dir}/safety-check-log.json` });
     r.history = { trades: Array.from({ length: 1001 }, (_, i) => ({ idx: i, orderPlaced: false })) };
     // recordDecision triggers rotation

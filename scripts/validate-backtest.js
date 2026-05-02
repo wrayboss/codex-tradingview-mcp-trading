@@ -5,13 +5,15 @@
  * Usage:
  *   node scripts/validate-backtest.js <tv-export.csv> [<tv-export-2.csv> ...]
  *
- * The live cycle only trusts state/backtest-approved.json when it contains a
- * top-level JSON boolean: { "approved": true }.
+ * Runtime trusts state/backtest-approved.json by account type:
+ *   demo accounts require demoApproved === true
+ *   real accounts require realApproved === true plus explicit real-account env gates
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
+import { computeApprovalFingerprint, APPROVAL_SCHEMA_VERSION } from "../src/approvalFingerprint.js";
 
 const DEFAULT_STATE_DIR = "state";
 const APPROVED_FILE_NAME = "backtest-approved.json";
@@ -219,14 +221,41 @@ export function runGates(allTrades, perSymbol, demo, gates = DEFAULT_GATES) {
   addGate(6, "Walk-forward degradation <= 20%", wf.degradation <= gates.maxWFDegradation, `PF in-sample ${formatRatio(wf.pfIn)} (${wf.inCount} trades) -> out-of-sample ${formatRatio(wf.pfOut)} (${wf.outCount} trades), degradation ${(wf.degradation * 100).toFixed(1)}%`);
   addGate(7, `>= ${gates.minDemoSignals} demo signals with PF >= ${gates.minDemoProfitFactor}`, demo.count >= gates.minDemoSignals && demo.pf >= gates.minDemoProfitFactor, `Demo settled: ${demo.count} trades | PF: ${formatRatio(demo.pf)}`);
 
-  return { pass: results.every(result => result.pass), results, metrics, wf };
+  const demoApproved = results.filter(result => Number(result.gate) >= 1 && Number(result.gate) <= 6).every(result => result.pass);
+  const realApproved = results.every(result => result.pass);
+  return { pass: realApproved, demoApproved, realApproved, results, metrics, wf };
 }
 
-export function buildApprovalRecord({ approved, files, results, metrics, wf, demo, now = new Date() }) {
+export function getValidationExitCode(result) {
+  return result?.demoApproved === true ? 0 : 1;
+}
+
+export function getOverallStatusText({ demoApproved, realApproved } = {}) {
+  if (realApproved === true) return "REAL APPROVED - demo and real gates passed";
+  if (demoApproved === true) return "DEMO APPROVED - real trading still blocked until gate 7 passes";
+  return "FAILED - demo and real trading remain blocked";
+}
+
+export function buildApprovalRecord({
+  approved,
+  demoApproved = approved === true,
+  realApproved = approved === true,
+  files,
+  results,
+  metrics,
+  wf,
+  demo,
+  fingerprint = computeApprovalFingerprint(),
+  now = new Date(),
+}) {
   return {
     approved: approved === true,
+    demoApproved: demoApproved === true,
+    realApproved: realApproved === true,
+    approval_schema_version: APPROVAL_SCHEMA_VERSION,
     validated_at: now.toISOString(),
     files,
+    fingerprint,
     gates: results,
     metrics: metrics ? {
       net_profit: round(metrics.netProfit, 2),
@@ -276,11 +305,13 @@ export async function validateBacktest({
   const demoResult = demo ?? checkDemoLog(demoLogFile);
   logger.log(`Demo log: ${demoResult.count} settled trades | PF ${formatRatio(demoResult.pf)}`);
 
-  const { pass, results, metrics, wf } = runGates(allTrades, perSymbol, demoResult, gates);
-  printResults(results, pass, logger);
+  const { pass, demoApproved, realApproved, results, metrics, wf } = runGates(allTrades, perSymbol, demoResult, gates);
+  printResults(results, { demoApproved, realApproved }, logger);
 
   const record = buildApprovalRecord({
     approved: pass,
+    demoApproved,
+    realApproved,
     files,
     results,
     metrics,
@@ -292,9 +323,9 @@ export async function validateBacktest({
   mkdirSync(stateDir, { recursive: true });
   const approvalFile = path.join(stateDir, APPROVED_FILE_NAME);
   writeFileSync(approvalFile, `${JSON.stringify(record, null, 2)}\n`);
-  logger.log(`[log] ${approvalFile} written (approved: ${record.approved})`);
+  logger.log(`[log] ${approvalFile} written (demoApproved: ${record.demoApproved}, realApproved: ${record.realApproved})`);
 
-  return { pass, record, results, metrics, wf, demo: demoResult, approvalFile };
+  return { pass, demoApproved, realApproved, record, results, metrics, wf, demo: demoResult, approvalFile };
 }
 
 function detectDelimiter(headerLine) {
@@ -333,7 +364,7 @@ function parseNumber(value) {
   return negativeByParens ? -Math.abs(parsed) : parsed;
 }
 
-function printResults(results, pass, logger) {
+function printResults(results, approval, logger) {
   logger.log("\n============================================================");
   logger.log("  BACKTEST GO-LIVE GATE RESULTS");
   logger.log("============================================================");
@@ -344,10 +375,10 @@ function printResults(results, pass, logger) {
   }
   const failed = results.filter(result => !result.pass);
   if (failed.length) {
-    logger.error(`\nFailed gates: ${failed.map(result => result.gate).join(", ")}. Live trading remains blocked.`);
+    logger.error(`\nFailed gates: ${failed.map(result => result.gate).join(", ")}.`);
   }
   logger.log("------------------------------------------------------------");
-  logger.log(`  Overall: ${pass ? "ALL GATES PASSED" : "FAILED - do not enable live trading"}`);
+  logger.log(`  Overall: ${getOverallStatusText(approval)}`);
   logger.log("============================================================\n");
 }
 
@@ -373,11 +404,11 @@ async function main() {
 
   try {
     const result = await validateBacktest({ files });
-    return result.pass ? 0 : 1;
+    return getValidationExitCode(result);
   } catch (err) {
     console.error("\nBacktest validation failed before gate approval.");
     console.error(err.message);
-    console.error("Live trading remains blocked until this command completes with approved: true.");
+    console.error("Trading remains blocked until this command completes with demoApproved: true or realApproved: true as required by account type.");
     return 1;
   }
 }
