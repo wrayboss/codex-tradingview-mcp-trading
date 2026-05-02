@@ -64,6 +64,22 @@ Deriv multiplier stakes are locally blocked below `$1.00`; old `0.001` lot-size 
 | `npm run validate-backtest <csv...>` | Check TradingView List of Trades exports against 7 go-live gates |
 | `npm run launch` | Relaunch TradingView Desktop with CDP on port `9222` |
 | `npm run codex:check` | Self-test the Codex MCP bridge |
+| `npm run scan:secrets` | Check tracked files for secrets and runtime artifacts before review |
+
+## Validation / Merge Gate
+
+Every PR must prove the safety and hygiene gates still hold:
+
+```powershell
+npm test
+npm run codex:check
+npm run scan:secrets
+node scripts/validate-backtest.js
+```
+
+`node scripts/validate-backtest.js` with no CSV must exit with code `1` and print usage text. CI treats that as an intentional usage check, not as a broken workflow.
+
+Do not work on local `main`; use a branch or isolated worktree for changes. PRs must not weaken live safety gates without explicit review, and runtime/private artifacts such as `.env`, `trades.csv`, `safety-check-log*.json`, `state/`, tokens, screenshots, and account artifacts must stay out of version control.
 
 ### Dry-Run And Live Flow
 

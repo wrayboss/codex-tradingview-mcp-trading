@@ -16,6 +16,7 @@ import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts } from 
 import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
 import { getOperatorWatchlist, resolveActiveWatchlist, resolveOperatorSymbol } from "../src/watchlist.js";
 import { createCodexTools, normalizeSyntheticSymbol, normalizeTradingViewSyntheticSymbol } from "../codex-mcp/tools.js";
+import { scanRepo } from "../scripts/scan-secrets.js";
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -379,6 +380,38 @@ await group("Windows TradingView launcher", () => {
     });
     eq("ResolveOnly exits cleanly with explicit executable", result.status, 0);
     eq("ResolveOnly prints resolved executable", result.stdout.trim().toLowerCase(), fakeExe.toLowerCase());
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await group("secret scanner", () => {
+  const dir = "tmp-secret-scan";
+  try {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(`${dir}/env.example`, "DERIV_API_TOKEN=your_deriv_api_token_here\n");
+    writeFileSync(`${dir}/bad-token.txt`, "DERIV_API_TOKEN=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n");
+    writeFileSync(`${dir}/runtime.csv`, "Date,Symbol\n");
+
+    const clean = scanRepo({
+      rootDir: process.cwd(),
+      trackedFiles: [`${dir}/env.example`],
+    });
+    eq("allows Deriv token placeholder", clean.ok, true);
+
+    const leaked = scanRepo({
+      rootDir: process.cwd(),
+      trackedFiles: [`${dir}/bad-token.txt`],
+    });
+    eq("rejects non-placeholder Deriv token", leaked.ok, false);
+    truthy("reports Deriv token finding", leaked.findings.some(f => f.reason.includes("DERIV_API_TOKEN")));
+
+    const runtime = scanRepo({
+      rootDir: process.cwd(),
+      trackedFiles: ["trades.csv", "state/backtest-approved.json", "safety-check-log.json"],
+    });
+    eq("rejects tracked runtime artifacts", runtime.findings.length, 3);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
