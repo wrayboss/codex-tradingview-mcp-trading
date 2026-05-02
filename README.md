@@ -82,7 +82,7 @@ Before live/demo order placement, validate TradingView backtests:
 npm run validate-backtest R_75-export.csv R_50-export.csv
 ```
 
-The validator writes `state/backtest-approved.json`. Dry-run does not require this file. Demo non-dry-run requires `demoApproved: true`; real-account non-dry-run requires `realApproved: true`.
+The validator writes `state/backtest-approved.json`. Dry-run does not require this file. Demo non-dry-run requires `demoApproved: true`; real-account non-dry-run requires `realApproved: true`. `npm run validate-backtest <csv...>` exits successfully when demo approval is reached, even if gate 7 is still blocking real approval.
 
 Real Deriv accounts have an additional hard block. A real account can only trade when all of these are true in the local environment:
 
@@ -141,7 +141,7 @@ npm run validate-backtest R_75-export.csv R_50-export.csv
 ```
 
 The validator checks all 7 go-live gates and writes `state/backtest-approved.json`.
-Gates 1-6 produce `demoApproved: true` for demo non-dry-run validation. Gates 1-7 produce `realApproved: true` for real-money validation. The bot rejects missing, invalid, or stale approval records before any non-dry-run order path.
+Gates 1-6 produce `demoApproved: true` for demo non-dry-run validation. Gates 1-7 produce `realApproved: true` for real-money validation. Real trading also requires `ALLOW_REAL_TRADING=true` and `DERIV_ALLOWED_REAL_LOGINID` to exactly match the authorized real account. The bot rejects missing, invalid, or stale approval records before any non-dry-run order path.
 
 ### Go-Live Gates
 
@@ -219,7 +219,7 @@ node scripts/set-chart.js VOLATILITY_50 15
 | `pine/breakout_retest_v1.pine` | TradingView strategy for backtesting |
 | `scripts/validate-backtest.js` | Gate validator — reads TV CSV, writes backtest-approved.json |
 | `tests/integration.js` | Integration tests — 11 tests, no network calls |
-| `state/backtest-approved.json` | Gate results — must have `approved: true` for live trading |
+| `state/backtest-approved.json` | Gate results — `demoApproved` gates demo trading, `realApproved` gates real trading |
 | `state/bot.pid` | PID lock — prevents concurrent bot instances |
 | `state/traded-levels-R_75.json` | Levels that produced a V75 trade (not re-armed) |
 | `state/traded-levels-R_50.json` | Levels that produced a V50 trade (not re-armed) |

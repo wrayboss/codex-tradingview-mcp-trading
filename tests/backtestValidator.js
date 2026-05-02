@@ -5,6 +5,8 @@ import {
   buildApprovalRecord,
   checkDemoLog,
   runGates,
+  getValidationExitCode,
+  getOverallStatusText,
 } from "../scripts/validate-backtest.js";
 
 const FIXTURES = "tests/fixtures/backtests";
@@ -118,6 +120,26 @@ export const backtestValidatorTests = [
       eq("demoApproved true when gates 1-6 pass", result.demoApproved, true);
       eq("realApproved false when gate 7 fails", result.realApproved, false);
       eq("overall pass remains real approval", result.pass, false);
+      eq("demo-approved validator exit code is success", getValidationExitCode(result), 0);
+      eq("demo-approved overall wording", getOverallStatusText(result), "DEMO APPROVED - real trading still blocked until gate 7 passes");
+    },
+  },
+  {
+    name: "validator exit code fails when demo approval fails",
+    async run(eq, truthy) {
+      const result = runGates([{ profit: -10, cumProfit: -10 }], [{ symbol: "R_75", count: 1 }], { count: 0, pf: 0 }, {
+        minNetProfit: 0,
+        minWinRate: 0.3,
+        minProfitFactor: 1.0,
+        maxDrawdownPct: 1.0,
+        minTradesPerSymbol: 10,
+        maxWFDegradation: 1.0,
+        minDemoSignals: 50,
+        minDemoProfitFactor: 1.4,
+      });
+      eq("demoApproved false", result.demoApproved, false);
+      eq("validator exit code is failure", getValidationExitCode(result), 1);
+      eq("failed overall wording", getOverallStatusText(result), "FAILED - demo and real trading remain blocked");
     },
   },
   {
@@ -137,6 +159,8 @@ export const backtestValidatorTests = [
       eq("demoApproved true", result.demoApproved, true);
       eq("realApproved true when gate 7 passes", result.realApproved, true);
       eq("overall pass true", result.pass, true);
+      eq("real-approved validator exit code is success", getValidationExitCode(result), 0);
+      eq("real-approved overall wording", getOverallStatusText(result), "REAL APPROVED - demo and real gates passed");
     },
   },
   {
