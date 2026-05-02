@@ -25,6 +25,7 @@ import { evaluateTrendFilter }  from "./trendFilter.js";
 import { emaSeries, rsiSeries, atrSeries, smaSeries } from "./indicators.js";
 import { filterInProgress }     from "./candleUtils.js";
 import { monitorContract }      from "./contractMonitor.js";
+import { assertRuntimeLiveSafety, loadCurrentApprovalContext } from "./liveSafetyGate.js";
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -106,15 +107,19 @@ export async function runCycle(config, rules, risk, opts = {}) {
     return undefined;
   }
 
-  // Backtest gate (live only)
+  // Live safety gates (non-dry-run only)
   if (!dryRun) {
-    const backtestFile = `${stateDir}/backtest-approved.json`;
-    let btApproved = false;
-    if (existsSync(backtestFile)) {
-      try { btApproved = JSON.parse(readFileSync(backtestFile, "utf8"))?.approved === true; } catch {}
-    }
-    if (!btApproved) {
-      console.log("[gate] Backtest not approved. Run: npm run validate-backtest <tv-export.csv>");
+    try {
+      const { approval, currentFingerprint } = loadCurrentApprovalContext({ stateDir });
+      assertRuntimeLiveSafety({
+        dryRun,
+        account,
+        env: opts.env || process.env,
+        approval,
+        currentFingerprint,
+      });
+    } catch (err) {
+      console.log(`[gate] ${err.message}`);
       client.close();
       return undefined;
     }

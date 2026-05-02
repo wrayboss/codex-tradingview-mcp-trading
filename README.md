@@ -82,7 +82,18 @@ Before live/demo order placement, validate TradingView backtests:
 npm run validate-backtest R_75-export.csv R_50-export.csv
 ```
 
-The validator writes `state/backtest-approved.json`. `npm run trade` and `npm run loop` will not place orders until that file contains `approved: true`.
+The validator writes `state/backtest-approved.json`. Dry-run does not require this file. Demo non-dry-run requires `demoApproved: true`; real-account non-dry-run requires `realApproved: true`.
+
+Real Deriv accounts have an additional hard block. A real account can only trade when all of these are true in the local environment:
+
+```env
+ALLOW_REAL_TRADING=true
+DERIV_ALLOWED_REAL_LOGINID=exact_authorized_loginid
+```
+
+`DERIV_ALLOWED_REAL_LOGINID` must exactly match the loginid returned by Deriv authorization. Set `TRADING_KILL_SWITCH=true` to block all non-dry-run order placement for both demo and real accounts. Dry-run remains usable with the kill switch enabled.
+
+Backtest approval is fingerprinted against `rules.json`, `pine/breakout_retest_v1.pine`, `package.json`, strategy name/version, symbols, timeframes, and validator schema. Any strategy/config/Pine/package change makes old approval stale; re-run `npm run validate-backtest <csv...>` after those changes.
 
 For agent-run verification, treat the flow as complete only when the relevant command output or artifact confirms the state being claimed.
 
@@ -130,7 +141,7 @@ npm run validate-backtest R_75-export.csv R_50-export.csv
 ```
 
 The validator checks all 7 go-live gates and writes `state/backtest-approved.json`.
-The bot will not place live orders until `approved: true` is in that file.
+Gates 1-6 produce `demoApproved: true` for demo non-dry-run validation. Gates 1-7 produce `realApproved: true` for real-money validation. The bot rejects missing, invalid, or stale approval records before any non-dry-run order path.
 
 ### Go-Live Gates
 

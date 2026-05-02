@@ -10,6 +10,7 @@ import { runCycle, reconcileUnsettled, placeOrderWithRetry } from "../src/cycle.
 import { monitorContract } from "../src/contractMonitor.js";
 import { RiskManager } from "../src/riskManager.js";
 import { loadRules }   from "../src/rulesLoader.js";
+import { computeApprovalFingerprint } from "../src/approvalFingerprint.js";
 
 const rules   = loadRules("./rules.json");
 const TMPDIR  = "state-test-tmp";
@@ -93,13 +94,14 @@ function makeMockClient({
   buyFails      = 0,    // throw this many times before succeeding
   settled       = true,
   profit        = 5,
+  account       = { email: "test@test.com", loginid: "VR000", is_virtual: true, currency: "USD", balance: 1000 },
 } = {}) {
   let buyAttempts = 0;
   const calls     = { buy: 0, proposal: 0, contractStatus: 0, openPositions: 0 };
   const client    = {
     _calls: calls,
     connect:       async () => {},
-    authorize:     async () => ({ email: "test@test.com", is_virtual: true, currency: "USD", balance: 1000 }),
+    authorize:     async () => account,
     candles:       async ({ granularity }) => granularity >= 3600 ? htfCandles : ltfCandles,
     openPositions: async () => { calls.openPositions++; return openPositions; },
     proposal:      async () => { calls.proposal++; return { proposal: { id: proposalId } }; },
@@ -134,12 +136,22 @@ const baseConfig = {
 // Approved backtest file written to tmpDir for live-mode tests
 function approvedBacktest(dir) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(`${dir}/backtest-approved.json`, JSON.stringify({ approved: true }));
+  writeFileSync(`${dir}/backtest-approved.json`, JSON.stringify({
+    approved: true,
+    demoApproved: true,
+    realApproved: true,
+    fingerprint: computeApprovalFingerprint({ includeGitCommit: false }),
+  }));
 }
 
 function notApprovedBacktest(dir) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(`${dir}/backtest-approved.json`, JSON.stringify({ approved: false }));
+  writeFileSync(`${dir}/backtest-approved.json`, JSON.stringify({
+    approved: false,
+    demoApproved: false,
+    realApproved: false,
+    fingerprint: computeApprovalFingerprint({ includeGitCommit: false }),
+  }));
 }
 
 function cleanTmp(dir) {
@@ -181,6 +193,133 @@ export const integrationTests = [
           stateDir: dir, clientFactory: factory,
         });
         eq("returns undefined when gate blocked", result, undefined);
+        eq("buy never called", factory()._calls.buy, 0);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
+    name: "runtime approval gate — rejects missing fingerprint",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-missing-fingerprint`;
+      try {
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        writeFileSync(`${dir}/backtest-approved.json`, JSON.stringify({ approved: true, demoApproved: true, realApproved: true }));
+        const risk    = makeRisk();
+        const factory = makeMockClient({ ltfCandles: flatLtfCandles(60) });
+        const result  = await runCycle(baseConfig, rules, risk, {
+          dryRun: false, monitorSettlement: false,
+          stateDir: dir, clientFactory: factory,
+        });
+        eq("returns undefined on missing fingerprint", result, undefined);
+        eq("buy never called", factory()._calls.buy, 0);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
+    name: "runtime approval gate — rejects rules hash mismatch",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-rules-mismatch`;
+      try {
+        approvedBacktest(dir);
+        const saved = JSON.parse(readFileSync(`${dir}/backtest-approved.json`, "utf8"));
+        saved.fingerprint.rules_hash = "bad";
+        writeFileSync(`${dir}/backtest-approved.json`, JSON.stringify(saved));
+        const risk    = makeRisk();
+        const factory = makeMockClient({ ltfCandles: flatLtfCandles(60) });
+        const result  = await runCycle(baseConfig, rules, risk, {
+          dryRun: false, monitorSettlement: false,
+          stateDir: dir, clientFactory: factory,
+        });
+        eq("returns undefined on stale approval", result, undefined);
+        eq("buy never called", factory()._calls.buy, 0);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
+    name: "real account gate — blocks without ALLOW_REAL_TRADING",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-real-no-allow`;
+      try {
+        approvedBacktest(dir);
+        const factory = makeMockClient({ account: { email: "real@test.com", loginid: "CR123", is_virtual: false, currency: "USD", balance: 1000 } });
+        const result = await runCycle(baseConfig, rules, makeRisk(), {
+          dryRun: false, monitorSettlement: false, stateDir: dir, clientFactory: factory,
+          env: { ALLOW_REAL_TRADING: "false", DERIV_ALLOWED_REAL_LOGINID: "CR123" },
+        });
+        eq("blocked", result, undefined);
+        eq("buy never called", factory()._calls.buy, 0);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
+    name: "real account gate — blocks loginid mismatch",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-real-mismatch`;
+      try {
+        approvedBacktest(dir);
+        const factory = makeMockClient({ account: { email: "real@test.com", loginid: "CR123", is_virtual: false, currency: "USD", balance: 1000 } });
+        const result = await runCycle(baseConfig, rules, makeRisk(), {
+          dryRun: false, monitorSettlement: false, stateDir: dir, clientFactory: factory,
+          env: { ALLOW_REAL_TRADING: "true", DERIV_ALLOWED_REAL_LOGINID: "CR999" },
+        });
+        eq("blocked", result, undefined);
+        eq("buy never called", factory()._calls.buy, 0);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
+    name: "real account gate — allows when env gates match",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-real-allowed`;
+      try {
+        approvedBacktest(dir);
+        const factory = makeMockClient({
+          account: { email: "real@test.com", loginid: "CR123", is_virtual: false, currency: "USD", balance: 1000 },
+          ltfCandles: flatLtfCandles(60),
+        });
+        const result = await runCycle(baseConfig, rules, makeRisk(), {
+          dryRun: false, monitorSettlement: false, stateDir: dir, clientFactory: factory,
+          env: { ALLOW_REAL_TRADING: "true", DERIV_ALLOWED_REAL_LOGINID: "CR123" },
+        });
+        truthy("passed account gate and reached no-signal decision", result != null);
+        eq("buy never called without signal", factory()._calls.buy, 0);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
+    name: "kill switch — blocks non-dry-run",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-kill-live`;
+      try {
+        approvedBacktest(dir);
+        const factory = makeMockClient();
+        const result = await runCycle(baseConfig, rules, makeRisk(), {
+          dryRun: false, monitorSettlement: false, stateDir: dir, clientFactory: factory,
+          env: { TRADING_KILL_SWITCH: "true" },
+        });
+        eq("blocked", result, undefined);
+        eq("buy never called", factory()._calls.buy, 0);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
+    name: "kill switch — dry-run still works",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-kill-dry`;
+      try {
+        const factory = makeMockClient({ ltfCandles: flatLtfCandles(60) });
+        const result = await runCycle(baseConfig, rules, makeRisk(), {
+          dryRun: true, monitorSettlement: false, stateDir: dir, clientFactory: factory,
+          env: { TRADING_KILL_SWITCH: "true" },
+        });
+        truthy("dry-run returns decision", result != null);
         eq("buy never called", factory()._calls.buy, 0);
       } finally { cleanTmp(dir); }
     },

@@ -12,6 +12,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
+import { computeApprovalFingerprint, APPROVAL_SCHEMA_VERSION } from "../src/approvalFingerprint.js";
 
 const DEFAULT_STATE_DIR = "state";
 const APPROVED_FILE_NAME = "backtest-approved.json";
@@ -219,14 +220,31 @@ export function runGates(allTrades, perSymbol, demo, gates = DEFAULT_GATES) {
   addGate(6, "Walk-forward degradation <= 20%", wf.degradation <= gates.maxWFDegradation, `PF in-sample ${formatRatio(wf.pfIn)} (${wf.inCount} trades) -> out-of-sample ${formatRatio(wf.pfOut)} (${wf.outCount} trades), degradation ${(wf.degradation * 100).toFixed(1)}%`);
   addGate(7, `>= ${gates.minDemoSignals} demo signals with PF >= ${gates.minDemoProfitFactor}`, demo.count >= gates.minDemoSignals && demo.pf >= gates.minDemoProfitFactor, `Demo settled: ${demo.count} trades | PF: ${formatRatio(demo.pf)}`);
 
-  return { pass: results.every(result => result.pass), results, metrics, wf };
+  const demoApproved = results.filter(result => Number(result.gate) >= 1 && Number(result.gate) <= 6).every(result => result.pass);
+  const realApproved = results.every(result => result.pass);
+  return { pass: realApproved, demoApproved, realApproved, results, metrics, wf };
 }
 
-export function buildApprovalRecord({ approved, files, results, metrics, wf, demo, now = new Date() }) {
+export function buildApprovalRecord({
+  approved,
+  demoApproved = approved === true,
+  realApproved = approved === true,
+  files,
+  results,
+  metrics,
+  wf,
+  demo,
+  fingerprint = computeApprovalFingerprint(),
+  now = new Date(),
+}) {
   return {
     approved: approved === true,
+    demoApproved: demoApproved === true,
+    realApproved: realApproved === true,
+    approval_schema_version: APPROVAL_SCHEMA_VERSION,
     validated_at: now.toISOString(),
     files,
+    fingerprint,
     gates: results,
     metrics: metrics ? {
       net_profit: round(metrics.netProfit, 2),
@@ -276,11 +294,13 @@ export async function validateBacktest({
   const demoResult = demo ?? checkDemoLog(demoLogFile);
   logger.log(`Demo log: ${demoResult.count} settled trades | PF ${formatRatio(demoResult.pf)}`);
 
-  const { pass, results, metrics, wf } = runGates(allTrades, perSymbol, demoResult, gates);
+  const { pass, demoApproved, realApproved, results, metrics, wf } = runGates(allTrades, perSymbol, demoResult, gates);
   printResults(results, pass, logger);
 
   const record = buildApprovalRecord({
     approved: pass,
+    demoApproved,
+    realApproved,
     files,
     results,
     metrics,
@@ -292,9 +312,9 @@ export async function validateBacktest({
   mkdirSync(stateDir, { recursive: true });
   const approvalFile = path.join(stateDir, APPROVED_FILE_NAME);
   writeFileSync(approvalFile, `${JSON.stringify(record, null, 2)}\n`);
-  logger.log(`[log] ${approvalFile} written (approved: ${record.approved})`);
+  logger.log(`[log] ${approvalFile} written (demoApproved: ${record.demoApproved}, realApproved: ${record.realApproved})`);
 
-  return { pass, record, results, metrics, wf, demo: demoResult, approvalFile };
+  return { pass, demoApproved, realApproved, record, results, metrics, wf, demo: demoResult, approvalFile };
 }
 
 function detectDelimiter(headerLine) {
