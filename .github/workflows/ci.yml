@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check Codex MCP bridge
+        run: npm run codex:check
+
+      - name: Check backtest validator usage failure
+        shell: bash
+        run: |
+          set +e
+          output="$(node scripts/validate-backtest.js 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -ne 1 ]; then
+            echo "Expected validate-backtest with no args to exit 1, got $status" >&2
+            exit 1
+          fi
+          if ! grep -q "Usage: node scripts/validate-backtest.js <tv-export.csv>" <<< "$output"; then
+            echo "Expected validate-backtest with no args to print usage text" >&2
+            exit 1
+          fi

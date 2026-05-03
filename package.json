@@ -13,7 +13,8 @@
     "codex:check": "node codex-mcp/server.js --self-test",
     "test": "node tests/run-tests.js",
     "launch": "powershell -ExecutionPolicy Bypass -File launch.ps1",
-    "validate-backtest": "node scripts/validate-backtest.js"
+    "validate-backtest": "node scripts/validate-backtest.js",
+    "scan:secrets": "node scripts/scan-secrets.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
