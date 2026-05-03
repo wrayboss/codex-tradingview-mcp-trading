@@ -2,6 +2,7 @@ import {
   CANONICAL_GITHUB_SLUG,
   normalizeGithubRemote,
   evaluateGitRemotePreflight,
+  isDirectRun,
 } from "../scripts/git-remote-preflight.js";
 
 export const gitRemotePreflightTests = [
@@ -94,6 +95,16 @@ export const gitRemotePreflightTests = [
       truthy(
         "upstream mismatch reported",
         result.issues.some(issue => issue.includes("expected codex/remote-preflight"))
+      );
+    },
+  },
+  {
+    name: "detects direct run for absolute posix paths",
+    async run(eq) {
+      eq(
+        "posix path matches import.meta.url",
+        isDirectRun("file:///workspace/scripts/git-remote-preflight.js", "/workspace/scripts/git-remote-preflight.js"),
+        true
       );
     },
   },

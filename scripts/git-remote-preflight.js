@@ -1,4 +1,5 @@
 import { execFileSync } from "child_process";
+import { pathToFileURL } from "url";
 
 export const CANONICAL_GITHUB_SLUG = "wrayboss/claude-tradingview-mcp-trading";
 export const CANONICAL_ORIGIN_URL = `https://github.com/${CANONICAL_GITHUB_SLUG}.git`;
@@ -96,6 +97,18 @@ export function readGitRemotePreflightContext() {
   };
 }
 
+export function isDirectRun(importMetaUrl, argv1) {
+  if (!argv1) {
+    return false;
+  }
+
+  const scriptUrl = argv1.startsWith("/")
+    ? new URL(argv1, "file://").href
+    : pathToFileURL(argv1).href;
+
+  return importMetaUrl === scriptUrl;
+}
+
 function formatGuidance(result) {
   const branch = result.currentBranch || "<branch-name>";
   return [
@@ -131,10 +144,6 @@ export function runGitRemotePreflight() {
   process.exitCode = 1;
 }
 
-const directRunPath = process.argv[1]
-  ? new URL(`file:///${process.argv[1].replace(/\\/g, "/")}`).href
-  : "";
-
-if (import.meta.url === directRunPath) {
+if (isDirectRun(import.meta.url, process.argv[1])) {
   runGitRemotePreflight();
 }
