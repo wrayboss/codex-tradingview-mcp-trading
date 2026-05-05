@@ -16,6 +16,10 @@ Codex Strategy Lab is the research/operator layer for Deriv derived-market work.
 npm run codex:doctor
 npm run codex:autonomy -- status
 npm run codex:autonomy -- plan --symbols=VOLATILITY_75,CRASH_500 --objective="rank research candidates"
+npm run jarvis -- plan --json
+npm run jarvis -- analyze --file state/research/candles/VOLATILITY_75-900s-500.json --json
+npm run jarvis -- scan --file state/research/watchlist.json --json
+npm run jarvis -- trade-desk --json
 npm run research:symbols
 npm run research:symbols -- --json
 npm run research:candles -- VOLATILITY_75 --count=500 --granularity=900
@@ -30,6 +34,8 @@ npm run codex:autonomy -- backtest --file state/research/candles/VOLATILITY_75-9
 `npm run research:candles` fetches read-only Deriv candles and writes JSON under `state/research/candles/`, which is ignored by Git through the existing `state/` rule.
 
 `npm run codex:autonomy` is the guarded local research loop. It reports available Codex capabilities, builds a mission plan, and ranks deterministic candidate strategy ideas against candle JSON. It never approves execution, writes `.env`, edits `rules.json`, or places orders.
+
+`npm run jarvis` is the local Trading Jarvis command center. It can produce roadmap, chart-analysis, watchlist-scan, strategy-builder, backtest-operator, and trade-desk checklists. Analysis and scan commands remain research/operator surfaces; only the existing validated bot commands can place orders.
 
 ## MCP Tools
 
@@ -48,6 +54,10 @@ Research-shaped tools are broad and read-only:
 - `strategy_autonomy_status`: current Codex autonomy capabilities and guardrails.
 - `strategy_autonomy_plan`: research-only mission plan for symbols and candle counts.
 - `strategy_candidate_backtest`: local candidate-strategy scoring from inline candles or a repo-local candle JSON file.
+- `jarvis_command_center`: chart/account/tool summary for the Trading Jarvis operator view.
+- `jarvis_analyze_chart`: candle and setup analysis without execution approval.
+- `jarvis_scan_watchlist`: multi-symbol research scan with execution eligibility labels.
+- `jarvis_trade_desk_check`: fail-closed readiness checklist for explicit demo/live requests.
 
 ## Symbol Source
 

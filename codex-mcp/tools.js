@@ -22,6 +22,12 @@ import {
   loadCandlePayload,
   rankBacktestResults,
 } from "../src/strategyAutonomy.js";
+import {
+  analyzeChartCandles,
+  buildCommandCenter,
+  buildTradeDeskChecklist,
+  scanWatchlist,
+} from "../src/tradingJarvis.js";
 import { validateDerivTradeSize } from "../src/tradeConstraints.js";
 
 export { normalizeSyntheticSymbol };
@@ -826,6 +832,87 @@ export function createCodexTools({
         promotionRequired: true,
       };
     },
+  );
+
+  addTool(
+    "jarvis_command_center",
+    textSchema(
+      "Build a Trading Jarvis command-center snapshot from chart state, indicators, screenshot, and optional account metadata.",
+      {
+        symbol: { type: "string", default: "VOLATILITY_75" },
+        timeframe: { type: "string", default: "15" },
+        includeScreenshot: { type: "boolean", default: false },
+      },
+    ),
+    async (args) => {
+      const chartState = tvClient.state ? await tvClient.state() : { targetCount: 0, targets: [] };
+      const indicators = tvClient.listIndicators ? await tvClient.listIndicators() : [];
+      const screenshot = args.includeScreenshot && tvClient.captureScreenshot
+        ? await tvClient.captureScreenshot({})
+        : null;
+      return buildCommandCenter({
+        chartState,
+        indicators,
+        screenshot,
+        symbol: args.symbol || "VOLATILITY_75",
+        timeframe: String(args.timeframe || "15"),
+      });
+    },
+  );
+
+  addTool(
+    "jarvis_analyze_chart",
+    textSchema(
+      "Analyze candles into Trading Jarvis bias, setup state, invalidation, and next action. This never approves execution.",
+      {
+        symbol: { type: "string", default: "VOLATILITY_75" },
+        timeframe: { type: "string", default: "15" },
+        candles: { type: "array", items: { type: "object" } },
+      },
+      ["candles"],
+    ),
+    async (args) => analyzeChartCandles({
+      symbol: args.symbol || "VOLATILITY_75",
+      timeframe: String(args.timeframe || "15"),
+      candles: args.candles || [],
+    }),
+  );
+
+  addTool(
+    "jarvis_scan_watchlist",
+    textSchema(
+      "Rank multiple symbols from supplied candle arrays while preserving research-vs-execution boundaries.",
+      {
+        timeframe: { type: "string", default: "15" },
+        symbolCandles: { type: "object", additionalProperties: { type: "array", items: { type: "object" } } },
+      },
+      ["symbolCandles"],
+    ),
+    async (args) => scanWatchlist({
+      symbolCandles: args.symbolCandles || {},
+      timeframe: String(args.timeframe || "15"),
+    }),
+  );
+
+  addTool(
+    "jarvis_trade_desk_check",
+    textSchema(
+      "Run fail-closed Jarvis trade-desk gates before any explicit demo/live execution command.",
+      {
+        explicitExecutionRequest: { type: "boolean", default: false },
+        account: { type: "object", additionalProperties: true },
+        approval: { type: "object", additionalProperties: true },
+        openPositions: { type: "array", items: { type: "object" } },
+        env: { type: "object", additionalProperties: true },
+      },
+    ),
+    async (args) => buildTradeDeskChecklist({
+      explicitExecutionRequest: args.explicitExecutionRequest === true,
+      account: args.account || null,
+      approval: args.approval || null,
+      openPositions: args.openPositions || [],
+      env: args.env || process.env,
+    }),
   );
 
   if (allowLiveTrading) {

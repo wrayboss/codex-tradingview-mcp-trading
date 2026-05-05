@@ -24,6 +24,8 @@ This repo is now a Deriv synthetic-indices breakout + retest bot.
 
 ```powershell
 npm test
+npm run jarvis -- plan --json
+npm run jarvis -- analyze --file <candle-json> --json
 npm run codex:autonomy -- status
 npm run codex:autonomy -- plan --symbols=VOLATILITY_75,VOLATILITY_50
 npm run codex:doctor
@@ -63,6 +65,8 @@ When reporting results, prefer:
 | `src/derivClient.js` | WebSocket client — `sendRetry()` for candles/status, plain `send()` for buy |
 | `src/derivSymbolRegistry.js` | Codex Strategy Lab research symbol catalogue and TradingView names |
 | `src/strategyAutonomy.js` | Research-only Codex Autonomy Lab planning and candidate backtest scoring |
+| `src/tradingJarvis.js` | Trading Jarvis command-center analysis, watchlist scan, and trade-desk guardrails |
+| `scripts/jarvis.js` | Local Trading Jarvis CLI |
 | `docs/codex-strategy-lab.md` | Read-only Codex research workflow and symbol-access boundary |
 | `pine/breakout_retest_v1.pine` | TradingView strategy for backtesting |
 | `scripts/validate-backtest.js` | Gate validator — parses TV CSV export, writes state/backtest-approved.json |
