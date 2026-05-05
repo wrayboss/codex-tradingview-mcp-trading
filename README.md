@@ -58,6 +58,9 @@ Deriv multiplier stakes are locally blocked below `$1.00`; old `0.001` lot-size 
 | --- | --- |
 | `npm test` | Run the local test suite with no network calls |
 | `npm run dry-run` | Connect to Deriv, evaluate strategy, log decision — no order |
+| `npm run codex:doctor` | Print a redacted Codex readiness report — no secrets |
+| `npm run research:symbols` | List Deriv derived/synthetic research symbols and TradingView names |
+| `npm run research:candles -- <symbol>` | Fetch read-only research candles under ignored `state/` |
 | `npm run trade` | Single live cycle — evaluate and place order if a signal fires and gates pass |
 | `npm run loop` | Live autonomous mode — runs every 15m bar close indefinitely |
 | `npm run loop:dry` | Autonomous loop without placing orders |
@@ -221,9 +224,15 @@ The bridge exposes read and dry-run tools by default:
 - `tv_health_check` / `tv_get_state` / `tv_list_indicators`
 - `tv_add_indicator` / `tv_remove_indicator`
 - `deriv_account_summary` / `deriv_candles`
+- `deriv_active_symbols` / `deriv_research_candles`
+- `tv_research_set_chart`
 - `strategy_evaluate_dry_run`
 
+`deriv_candles` and `tv_set_chart` remain execution-shaped V75/V50 tools. Use the `research` tools for broad Deriv symbol study, including Crash/Boom, Jump, Step, Range Break, baskets, Bull/Bear, and additional Volatility indices. Research tools do not make a symbol execution-eligible.
+
 Codex live trading is intentionally disabled by default. `CODEX_ALLOW_LIVE_TRADING=true` only reveals the experimental live tool, and that tool still refuses to place orders; use `npm run trade` or `npm run loop` after demo validation for bot execution.
+
+See `docs/codex-strategy-lab.md` for the full Codex research workflow.
 
 ## TradingView Launch And Pine
 

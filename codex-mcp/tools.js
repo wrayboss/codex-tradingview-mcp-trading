@@ -7,18 +7,19 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { DerivClient } from "../src/derivClient.js";
 import { normalizeSyntheticSymbol } from "../src/symbols.js";
+import {
+  formatDerivActiveSymbols,
+  getResearchSymbolCatalog,
+  normalizeDerivResearchSymbol,
+  resolveResearchSymbol,
+  toTradingViewSymbol,
+} from "../src/derivSymbolRegistry.js";
 import { validateDerivTradeSize } from "../src/tradeConstraints.js";
 
 export { normalizeSyntheticSymbol };
 
-const TRADINGVIEW_SYNTHETIC_SYMBOL_MAP = {
-  R_75: "DERIV:VOLATILITY_75_INDEX",
-  R_50: "DERIV:VOLATILITY_50_INDEX",
-};
-
 export function normalizeTradingViewSyntheticSymbol(symbol) {
-  const normalized = normalizeSyntheticSymbol(symbol);
-  return TRADINGVIEW_SYNTHETIC_SYMBOL_MAP[normalized];
+  return toTradingViewSymbol(symbol);
 }
 
 function textSchema(description, properties = {}, required = []) {
@@ -364,7 +365,8 @@ function defaultTvClient() {
     },
     async setChart({ symbol, timeframe = "15" } = {}) {
       if (!symbol) throw new Error("symbol is required.");
-      const normalizedSymbol = normalizeSyntheticSymbol(symbol);
+      const resolved = resolveResearchSymbol(symbol);
+      const normalizedSymbol = resolved.derivSymbol;
       const tvSymbol = toTradingViewSymbol(normalizedSymbol);
       return withChartPage(async ({ evaluate, navigate, wait }) => {
         const beforeUrl = await evaluate("location.href");
@@ -377,7 +379,15 @@ function defaultTvClient() {
         await navigate(nextUrl);
         await wait(2500);
         const afterUrl = await evaluate("location.href");
-        return { symbol: normalizedSymbol, tradingViewSymbol: tvSymbol, timeframe: String(timeframe), beforeUrl, afterUrl };
+        return {
+          symbol: normalizedSymbol,
+          operatorSymbol: resolved.symbol,
+          tradingViewSymbol: tvSymbol,
+          executionEligible: resolved.executionSupported,
+          timeframe: String(timeframe),
+          beforeUrl,
+          afterUrl,
+        };
       });
     },
     async injectPineSource({ source, compile = true } = {}) {
@@ -434,9 +444,9 @@ function defaultTvClient() {
   };
 }
 
-function defaultDerivClientFactory() {
+function defaultDerivClientFactory({ requireToken = true } = {}) {
   const apiToken = process.env.DERIV_API_TOKEN;
-  if (!apiToken || apiToken === "your_deriv_token_here" || apiToken === "your_token_here") {
+  if (requireToken && (!apiToken || apiToken === "your_deriv_token_here" || apiToken === "your_token_here")) {
     throw new Error("Set DERIV_API_TOKEN in .env before using Deriv-backed Codex tools.");
   }
   return new DerivClient({ apiToken, appId: process.env.DERIV_APP_ID || "129133" });
@@ -530,14 +540,47 @@ export function createCodexTools({
   addTool(
     "tv_set_chart",
     textSchema(
-      "Set the active TradingView chart symbol and timeframe. Synthetic symbols are limited to V75/V50.",
+      "Set the active TradingView chart symbol and timeframe for execution-supported V75/V50 symbols.",
       {
         symbol: { type: "string", enum: ["VOLATILITY_75", "VOLATILITY_50", "R_75", "R_50"] },
         timeframe: { type: "string", default: "15", description: "TradingView interval such as 1, 5, 15, 60, 240, or D." },
       },
       ["symbol"],
     ),
-    async (args) => tvClient.setChart({ ...args, symbol: normalizeSyntheticSymbol(args.symbol), timeframe: String(args.timeframe || "15") }),
+    async (args) => {
+      const normalized = normalizeSyntheticSymbol(args.symbol);
+      const resolved = resolveResearchSymbol(normalized);
+      return tvClient.setChart({
+        ...args,
+        symbol: normalized,
+        operatorSymbol: resolved.symbol,
+        tradingViewSymbol: resolved.tradingViewSymbol,
+        timeframe: String(args.timeframe || "15"),
+      });
+    },
+  );
+
+  addTool(
+    "tv_research_set_chart",
+    textSchema(
+      "Set the active TradingView chart symbol and timeframe for any known Deriv derived/synthetic research symbol. This does not make the symbol execution-eligible.",
+      {
+        symbol: { type: "string", description: "Deriv research symbol alias, Deriv API symbol, display name, or DERIV: TradingView symbol." },
+        timeframe: { type: "string", default: "15", description: "TradingView interval such as 1, 5, 15, 60, 240, or D." },
+      },
+      ["symbol"],
+    ),
+    async (args) => {
+      const resolved = resolveResearchSymbol(args.symbol);
+      return tvClient.setChart({
+        ...args,
+        symbol: resolved.derivSymbol,
+        operatorSymbol: resolved.symbol,
+        tradingViewSymbol: resolved.tradingViewSymbol,
+        executionEligible: resolved.executionSupported,
+        timeframe: String(args.timeframe || "15"),
+      });
+    },
   );
 
   addTool(
@@ -605,9 +648,35 @@ export function createCodexTools({
   );
 
   addTool(
+    "deriv_active_symbols",
+    textSchema(
+      "List current Deriv derived/synthetic research symbols with Codex aliases and TradingView chart names. This is read-only.",
+      {
+        live: { type: "boolean", default: true, description: "When true, fetch Deriv active_symbols; when false, return the repo fallback catalogue." },
+      },
+    ),
+    async (args) => {
+      if (args.live === false) {
+        return { source: "repo-fallback", symbols: getResearchSymbolCatalog() };
+      }
+      const client = derivClientFactory({ requireToken: false });
+      try {
+        if (client.connect) await client.connect();
+        const raw = client.activeSymbols
+          ? await client.activeSymbols({ productType: "basic" })
+          : [];
+        const formatted = raw.length ? formatDerivActiveSymbols(raw) : getResearchSymbolCatalog();
+        return { source: raw.length ? "deriv-active_symbols" : "repo-fallback", symbols: formatted };
+      } finally {
+        client.close?.();
+      }
+    },
+  );
+
+  addTool(
     "deriv_candles",
     textSchema(
-      "Fetch Deriv candles for VOLATILITY_75 or VOLATILITY_50.",
+      "Fetch Deriv candles for execution-supported V75/V50 symbols. This is read-only and does not place orders.",
       {
         symbol: { type: "string", enum: ["VOLATILITY_75", "VOLATILITY_50", "R_75", "R_50"] },
         granularity: { type: "number", default: 900 },
@@ -616,16 +685,58 @@ export function createCodexTools({
       ["symbol"],
     ),
     async (args) => {
+      const normalized = normalizeSyntheticSymbol(args.symbol);
+      const resolved = resolveResearchSymbol(normalized);
       const client = derivClientFactory();
       try {
         if (client.connect) await client.connect();
         if (client.authorize) await client.authorize();
         const candles = await client.candles({
-          symbol: normalizeSyntheticSymbol(args.symbol),
+          symbol: normalized,
           granularity: args.granularity || 900,
           count: args.count || 100,
         });
-        return { symbol: normalizeSyntheticSymbol(args.symbol), candles };
+        return {
+          symbol: resolved.derivSymbol,
+          operatorSymbol: resolved.symbol,
+          tradingViewSymbol: resolved.tradingViewSymbol,
+          candles,
+        };
+      } finally {
+        client.close?.();
+      }
+    },
+  );
+
+  addTool(
+    "deriv_research_candles",
+    textSchema(
+      "Fetch Deriv candles for any known Deriv derived/synthetic research symbol. This is read-only and does not place orders.",
+      {
+        symbol: { type: "string", description: "Deriv research symbol alias, Deriv API symbol, display name, or DERIV: TradingView symbol." },
+        granularity: { type: "number", default: 900 },
+        count: { type: "number", default: 100 },
+      },
+      ["symbol"],
+    ),
+    async (args) => {
+      const client = derivClientFactory({ requireToken: false });
+      try {
+        if (client.connect) await client.connect();
+        if (client.authorize) await client.authorize();
+        const resolved = resolveResearchSymbol(args.symbol);
+        const candles = await client.candles({
+          symbol: normalizeDerivResearchSymbol(args.symbol),
+          granularity: args.granularity || 900,
+          count: args.count || 100,
+        });
+        return {
+          symbol: resolved.derivSymbol,
+          operatorSymbol: resolved.symbol,
+          tradingViewSymbol: resolved.tradingViewSymbol,
+          executionEligible: resolved.executionSupported,
+          candles,
+        };
       } finally {
         client.close?.();
       }

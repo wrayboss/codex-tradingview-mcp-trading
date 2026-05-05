@@ -95,6 +95,14 @@ export class DerivClient {
     }));
   }
 
+  async activeSymbols({ productType = "basic" } = {}) {
+    const r = await this.sendRetry({
+      active_symbols: "brief",
+      product_type: productType,
+    });
+    return r.active_symbols || [];
+  }
+
   async openPositions() {
     const r = await this.sendRetry({ portfolio: 1 });
     return r.portfolio?.contracts || [];

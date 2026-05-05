@@ -13,8 +13,9 @@ This plugin supports manual trading first. It can analyze, monitor, backtest, im
 
 ## Boundaries
 
-- Supported strategy symbols are `VOLATILITY_75` and `VOLATILITY_50`; Deriv API symbols are `R_75` and `R_50`.
-- Do not introduce Crash or Boom symbols unless the user explicitly changes scope.
+- Supported execution strategy symbols are `VOLATILITY_75` and `VOLATILITY_50`; Deriv API symbols are `R_75` and `R_50`.
+- Codex Strategy Lab may inspect all known Deriv derived symbols through read-only research tools. Do not treat research symbols as execution-approved.
+- Do not introduce Crash or Boom symbols into execution unless the user explicitly changes strategy scope.
 - Keep Claude Code MCP/config untouched. Use the repo's Codex bridge and this plugin only.
 - Treat `.env` and tokens as local secrets. Never print token values.
 - For live trading requests, verify `state/backtest-approved.json`, symbol, stake, multiplier, stop loss, open-position state, and the user's explicit confirmation before running `npm run trade` or `npm run loop`.
@@ -26,7 +27,10 @@ Use these from repo root:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\plugins\trading-jarvis\scripts\install-local-plugin.ps1
 npm test
+npm run codex:doctor
 npm run codex:check
+npm run research:symbols
+npm run research:candles -- VOLATILITY_75 --count=500 --granularity=900
 npm run launch
 npm run dry-run
 npm run loop:dry
@@ -46,6 +50,7 @@ Prefer the Codex MCP bridge when the task is chart/account interaction:
 - `tv_health_check`: confirm TradingView Desktop CDP is reachable.
 - `tv_get_state`: list available TradingView CDP targets.
 - `tv_set_chart`: switch chart symbol and timeframe.
+- `tv_research_set_chart`: switch chart symbol/timeframe for broad Deriv research without execution approval.
 - `tv_list_indicators`: inspect visible studies.
 - `tv_add_indicator` / `tv_remove_indicator`: manage chart indicators.
 - `tv_capture_screenshot`: capture chart screenshots for visual analysis.
@@ -53,6 +58,8 @@ Prefer the Codex MCP bridge when the task is chart/account interaction:
 - `tv_get_pine_errors`: read visible Pine compile errors.
 - `deriv_account_summary`: return non-secret account metadata.
 - `deriv_candles`: fetch Deriv candles.
+- `deriv_active_symbols`: list current Deriv derived/synthetic research symbols.
+- `deriv_research_candles`: fetch read-only candles for broad Deriv research symbols.
 - `strategy_evaluate_dry_run`: run the current strategy in dry-run mode.
 
 If the external TradingView MCP server exists, proxied tools may also be available for quote data, strategy results, replay, Pine compile, drawings, alerts, panels, tabs, layouts, and screenshots.

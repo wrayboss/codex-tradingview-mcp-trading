@@ -20,6 +20,7 @@
 
 - Never print or commit `DERIV_API_TOKEN`.
 - Keep `.env` local only.
-- Do not introduce Crash or Boom symbols unless the user explicitly changes scope.
+- Do not introduce Crash or Boom symbols into execution unless the user explicitly changes strategy scope.
+- Codex research/chart/candle tools may inspect all known Deriv derived symbols through `docs/codex-strategy-lab.md`; research access does not make a symbol execution-eligible.
 - Do not touch Claude Code MCP/config when working on Codex-side capability.
 - Do not run live/demo execution unless the user explicitly asks in the current conversation and the repo gates are verified.

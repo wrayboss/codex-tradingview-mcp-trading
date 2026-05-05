@@ -14,7 +14,8 @@ This repo is now a Deriv synthetic-indices breakout + retest bot.
 
 - Trade only `VOLATILITY_75` and `VOLATILITY_50`.
 - Map to Deriv symbols `R_75` and `R_50`.
-- Do not add Crash/Boom symbols unless the user explicitly changes the strategy.
+- Do not add Crash/Boom symbols to execution unless the user explicitly changes the strategy.
+- Codex Strategy Lab research may inspect all known Deriv derived symbols, including Crash/Boom, Jump, Step, Range Break, baskets, Bull/Bear, and additional Volatility indices. This is read-only research access, not execution approval.
 - `SYMBOL` in `.env` must be either `VOLATILITY_75` or `VOLATILITY_50`; omit it to iterate every symbol in `rules.json` during loop mode.
 - Structure timeframe is 1H; entry timeframe is 15m.
 - The bot must decide only on closed 15m bars.
@@ -23,6 +24,9 @@ This repo is now a Deriv synthetic-indices breakout + retest bot.
 
 ```powershell
 npm test
+npm run codex:doctor
+npm run research:symbols
+npm run research:candles -- VOLATILITY_75 --count=500 --granularity=900
 npm run dry-run
 npm run loop          # autonomous — runs every 15m bar close, no user input needed
 npm run loop:dry      # autonomous loop, no orders placed
@@ -55,6 +59,8 @@ When reporting results, prefer:
 | `src/riskManager.js` | Daily cap, ATR-to-USD risk conversion, `save()` for in-place log updates |
 | `src/contractMonitor.js` | Post-order polling loop (30s interval, 12h max) |
 | `src/derivClient.js` | WebSocket client — `sendRetry()` for candles/status, plain `send()` for buy |
+| `src/derivSymbolRegistry.js` | Codex Strategy Lab research symbol catalogue and TradingView names |
+| `docs/codex-strategy-lab.md` | Read-only Codex research workflow and symbol-access boundary |
 | `pine/breakout_retest_v1.pine` | TradingView strategy for backtesting |
 | `scripts/validate-backtest.js` | Gate validator — parses TV CSV export, writes state/backtest-approved.json |
 | `tests/integration.js` | Integration test suite — 11 tests, zero network calls (mock DerivClient) |
