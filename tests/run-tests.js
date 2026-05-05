@@ -23,6 +23,14 @@ import {
   resolveResearchSymbol,
   toTradingViewSymbol,
 } from "../src/derivSymbolRegistry.js";
+import {
+  backtestCandidateSet,
+  buildAutonomyPlan,
+  buildAutonomyStatus,
+  generateStrategyCandidates,
+  loadCandlePayload,
+  rankBacktestResults,
+} from "../src/strategyAutonomy.js";
 import { scanRepo } from "../scripts/scan-secrets.js";
 import { createDecisionId, createOrderFilledEventId, createSettlementId } from "../src/tradeIdentity.js";
 import { appendTradeEventOnce, loadTradeEvents, hasTradeEvent, TRADE_EVENT_SCHEMA_VERSION } from "../src/tradeJournal.js";
@@ -487,6 +495,77 @@ await group("Codex Strategy Lab scripts", () => {
   truthy("codex doctor reports research catalog size", report.research.catalogCount >= 40);
 });
 
+await group("Codex Autonomy Lab", () => {
+  const status = buildAutonomyStatus({
+    env: { DERIV_API_TOKEN: "redacted-test-token", CODEX_ALLOW_LIVE_TRADING: "" },
+    packageJson: { name: "claude-tradingview-mcp-trading", version: "2.0.0" },
+    executionSymbols: ["VOLATILITY_75", "VOLATILITY_50"],
+    researchCatalog: getResearchSymbolCatalog(),
+    backtestApprovalExists: false,
+  });
+  eq("autonomy status redacts token value", JSON.stringify(status).includes("redacted-test-token"), false);
+  eq("autonomy status keeps execution symbols narrow", status.execution.symbols.join(","), "VOLATILITY_75,VOLATILITY_50");
+  eq("autonomy status is research-first", status.mode, "research_only");
+  eq("autonomy status live execution unavailable by default", status.execution.liveToolAvailable, false);
+  truthy("autonomy status reports strategy generation capability", status.capabilities.some(item => item.id === "candidate_strategy_backtest"));
+
+  const plan = buildAutonomyPlan({
+    objective: "find better V75/V50 breakout filters",
+    symbols: ["VOLATILITY_75", "CRASH_500"],
+    candleCount: 750,
+    granularity: 900,
+  });
+  eq("autonomy plan preserves objective", plan.objective, "find better V75/V50 breakout filters");
+  eq("autonomy plan marks Crash as research only", plan.symbols.find(item => item.symbol === "CRASH_500").executionEligible, false);
+  truthy("autonomy plan includes local backtest phase", plan.phases.some(phase => phase.id === "local_candidate_backtest"));
+  truthy("autonomy plan requires promotion gates before execution", plan.stopConditions.some(item => item.includes("validate-backtest")));
+
+  const candidates = generateStrategyCandidates({ symbol: "VOLATILITY_75" });
+  truthy("candidate generator returns multiple ideas", candidates.length >= 3);
+  truthy("candidate generator includes no execution approval", candidates.every(candidate => candidate.executionApproved === false));
+
+  const candles = Array.from({ length: 90 }, (_, i) => ({
+    epoch: 1000 + i * 900,
+    open: 100 + i,
+    high: 101 + i,
+    low: 99 + i,
+    close: 100.5 + i,
+  }));
+  const results = backtestCandidateSet({ candles, candidates });
+  truthy("candidate backtest returns scored results", results.length === candidates.length && results.every(result => Number.isFinite(result.score)));
+  truthy("candidate backtest produces trades on trending fixture", results.some(result => result.metrics.trades > 0));
+  const ranked = rankBacktestResults(results);
+  truthy("ranker sorts best score first", ranked[0].score >= ranked.at(-1).score);
+
+  const autonomyDir = "state-test-autonomy";
+  try {
+    rmSync(autonomyDir, { recursive: true, force: true });
+    mkdirSync(autonomyDir, { recursive: true });
+    writeFileSync(`${autonomyDir}/candles.json`, `\uFEFF${JSON.stringify({ candles })}`);
+    eq("candle payload loader handles UTF-8 BOM", loadCandlePayload(`${autonomyDir}/candles.json`).candles.length, candles.length);
+    const backtestCli = spawnSync(process.execPath, ["scripts/codex-autonomy.js", "backtest", "--file", `${autonomyDir}/candles.json`, "--json"], {
+      encoding: "utf8",
+      shell: false,
+    });
+    eq("codex autonomy backtest CLI accepts spaced --file", backtestCli.status, 0);
+    const backtestOutput = JSON.parse(backtestCli.stdout);
+    truthy("codex autonomy backtest CLI ranks candidates", backtestOutput.results.length >= 3);
+    eq("codex autonomy backtest CLI stays research-only", backtestOutput.executionApproved, false);
+  } finally {
+    rmSync(autonomyDir, { recursive: true, force: true });
+  }
+
+  const cli = spawnSync(process.execPath, ["scripts/codex-autonomy.js", "status", "--json"], {
+    encoding: "utf8",
+    shell: false,
+    env: { ...process.env, DERIV_API_TOKEN: "redacted-test-token", CODEX_ALLOW_LIVE_TRADING: "" },
+  });
+  eq("codex autonomy status CLI exits cleanly", cli.status, 0);
+  eq("codex autonomy status CLI does not print token", cli.stdout.includes("redacted-test-token"), false);
+  const cliStatus = JSON.parse(cli.stdout);
+  eq("codex autonomy status CLI reports research mode", cliStatus.mode, "research_only");
+});
+
 await group("Windows TradingView launcher", () => {
   const launcher = readFileSync("launch.ps1", "utf8");
   eq("launcher is not tied to TradingView 3.1.0.7818", launcher.includes("TradingView.Desktop_3.1.0.7818"), false);
@@ -640,6 +719,9 @@ await group("codex mcp bridge", async () => {
   truthy("lists deriv candles tool", names.includes("deriv_candles"));
   truthy("lists deriv research candles tool", names.includes("deriv_research_candles"));
   truthy("lists strategy dry run tool", names.includes("strategy_evaluate_dry_run"));
+  truthy("lists strategy autonomy status tool", names.includes("strategy_autonomy_status"));
+  truthy("lists strategy autonomy plan tool", names.includes("strategy_autonomy_plan"));
+  truthy("lists strategy candidate backtest tool", names.includes("strategy_candidate_backtest"));
   eq("live trade tool hidden by default", names.includes("deriv_place_multiplier_trade"), false);
 
   const health = await tools.call("tv_health_check", {});
@@ -734,6 +816,25 @@ await group("codex mcp bridge", async () => {
   const noAuthResearchCandles = await noAuthResearchTools.call("deriv_research_candles", { symbol: "CRASH_500", granularity: 900, count: 1 });
   eq("research candles works without authorization", noAuthResearchCandles.symbol, "CRASH500");
   eq("research candles skips authorize", researchAuthorizeCalls, 0);
+
+  const autonomyStatus = await tools.call("strategy_autonomy_status", {});
+  eq("autonomy MCP status is research-only", autonomyStatus.mode, "research_only");
+  eq("autonomy MCP status keeps execution symbols narrow", autonomyStatus.execution.symbols.join(","), "VOLATILITY_75,VOLATILITY_50");
+
+  const autonomyPlan = await tools.call("strategy_autonomy_plan", { objective: "research candidates", symbols: ["CRASH_500"], candleCount: 250 });
+  eq("autonomy MCP plan marks Crash as research-only", autonomyPlan.symbols[0].executionEligible, false);
+  truthy("autonomy MCP plan includes promotion gate", autonomyPlan.phases.some(phase => phase.id === "promotion_gate"));
+
+  const autonomyBacktestCandles = Array.from({ length: 90 }, (_, i) => ({
+    epoch: 2000 + i * 900,
+    open: 100 + i,
+    high: 101 + i,
+    low: 99 + i,
+    close: 100.5 + i,
+  }));
+  const autonomyBacktest = await tools.call("strategy_candidate_backtest", { symbol: "VOLATILITY_75", candles: autonomyBacktestCandles });
+  truthy("autonomy MCP backtest returns ranked candidates", autonomyBacktest.results.length >= 3);
+  truthy("autonomy MCP backtest keeps results research-only", autonomyBacktest.results.every(result => result.executionApproved === false));
 
   const liveEnabledTools = createCodexTools({
     allowLiveTrading: true,

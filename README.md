@@ -58,6 +58,9 @@ Deriv multiplier stakes are locally blocked below `$1.00`; old `0.001` lot-size 
 | --- | --- |
 | `npm test` | Run the local test suite with no network calls |
 | `npm run dry-run` | Connect to Deriv, evaluate strategy, log decision — no order |
+| `npm run codex:autonomy -- status` | Show Codex Autonomy Lab capabilities and guardrails |
+| `npm run codex:autonomy -- plan --symbols=VOLATILITY_75,CRASH_500` | Build a research-only strategy mission plan |
+| `npm run codex:autonomy -- backtest --file <candle-json>` | Rank local candidate strategies from research candles |
 | `npm run codex:doctor` | Print a redacted Codex readiness report — no secrets |
 | `npm run research:symbols` | List Deriv derived/synthetic research symbols and TradingView names |
 | `npm run research:candles -- <symbol>` | Fetch read-only research candles under ignored `state/` |
@@ -227,8 +230,11 @@ The bridge exposes read and dry-run tools by default:
 - `deriv_active_symbols` / `deriv_research_candles`
 - `tv_research_set_chart`
 - `strategy_evaluate_dry_run`
+- `strategy_autonomy_status` / `strategy_autonomy_plan` / `strategy_candidate_backtest`
 
 `deriv_candles` and `tv_set_chart` remain execution-shaped V75/V50 tools. Use the `research` tools for broad Deriv symbol study, including Crash/Boom, Jump, Step, Range Break, baskets, Bull/Bear, and additional Volatility indices. Research tools do not make a symbol execution-eligible.
+
+Codex Autonomy Lab is research-only. It can plan a mission, fetch/score candidate strategies from candle JSON, and identify promotion steps, but it does not edit `.env`, widen `rules.json`, write backtest approval, or place orders. A candidate can move toward execution only after explicit strategy work, TradingView validation, exported Strategy Tester trades, and `npm run validate-backtest <csv...>`.
 
 Codex live trading is intentionally disabled by default. `CODEX_ALLOW_LIVE_TRADING=true` only reveals the experimental live tool, and that tool still refuses to place orders; use `npm run trade` or `npm run loop` after demo validation for bot execution.
 

@@ -27,6 +27,8 @@ Use these from repo root:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\plugins\trading-jarvis\scripts\install-local-plugin.ps1
 npm test
+npm run codex:autonomy -- status
+npm run codex:autonomy -- plan --symbols=VOLATILITY_75,VOLATILITY_50
 npm run codex:doctor
 npm run codex:check
 npm run research:symbols
@@ -61,6 +63,9 @@ Prefer the Codex MCP bridge when the task is chart/account interaction:
 - `deriv_active_symbols`: list current Deriv derived/synthetic research symbols.
 - `deriv_research_candles`: fetch read-only candles for broad Deriv research symbols.
 - `strategy_evaluate_dry_run`: run the current strategy in dry-run mode.
+- `strategy_autonomy_status`: inspect Codex research/build/test/backtest capabilities and guardrails.
+- `strategy_autonomy_plan`: build a research-only mission plan for candidate strategy work.
+- `strategy_candidate_backtest`: score deterministic local candidate strategies from candle JSON or inline candles.
 
 If the external TradingView MCP server exists, proxied tools may also be available for quote data, strategy results, replay, Pine compile, drawings, alerts, panels, tabs, layouts, and screenshots.
 

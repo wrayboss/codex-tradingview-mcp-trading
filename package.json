@@ -9,6 +9,7 @@
     "loop": "node bot.js --loop",
     "loop:dry": "node bot.js --loop --dry-run",
     "dry-run": "node bot.js --dry-run",
+    "codex:autonomy": "node scripts/codex-autonomy.js",
     "codex:doctor": "node scripts/codex-doctor.js",
     "codex:mcp": "node codex-mcp/server.js",
     "codex:check": "node codex-mcp/server.js --self-test",
