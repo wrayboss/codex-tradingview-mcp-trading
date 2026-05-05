@@ -31,6 +31,16 @@ import {
   loadCandlePayload,
   rankBacktestResults,
 } from "../src/strategyAutonomy.js";
+import {
+  analyzeChartCandles,
+  buildBacktestOperatorChecklist,
+  buildCommandCenter,
+  buildJarvisRoadmap,
+  buildStrategyBuilderBrief,
+  buildTradeDeskChecklist,
+  scanWatchlist,
+  writeJarvisReport,
+} from "../src/tradingJarvis.js";
 import { scanRepo } from "../scripts/scan-secrets.js";
 import { createDecisionId, createOrderFilledEventId, createSettlementId } from "../src/tradeIdentity.js";
 import { appendTradeEventOnce, loadTradeEvents, hasTradeEvent, TRADE_EVENT_SCHEMA_VERSION } from "../src/tradeJournal.js";
@@ -566,6 +576,117 @@ await group("Codex Autonomy Lab", () => {
   eq("codex autonomy status CLI reports research mode", cliStatus.mode, "research_only");
 });
 
+await group("Trading Jarvis command center", () => {
+  const roadmap = buildJarvisRoadmap();
+  eq("Jarvis roadmap covers seven layers", roadmap.layers.length, 7);
+  truthy("Jarvis roadmap includes command center", roadmap.layers.some(layer => layer.id === "tradingview_command_center"));
+  truthy("Jarvis roadmap includes trade desk", roadmap.layers.some(layer => layer.id === "trade_desk_mode"));
+  truthy("Jarvis roadmap keeps execution gated", roadmap.guardrails.some(item => item.includes("validate-backtest")));
+
+  const commandCenter = buildCommandCenter({
+    chartState: { targetCount: 1, targets: [{ title: "TradingView", url: "https://www.tradingview.com/chart/?symbol=DERIV:VOLATILITY_75_INDEX" }] },
+    indicators: [{ name: "EMA", title: "Moving Average Exponential" }],
+    accountSummary: { loginid: "VR000", balance: 1000, apiToken: "must-not-leak" },
+    screenshot: { path: "state/chart.png", bytes: 1234 },
+    symbol: "VOLATILITY_75",
+    timeframe: "15",
+  });
+  eq("command center reports requested symbol", commandCenter.chart.symbol, "VOLATILITY_75");
+  eq("command center redacts account token", JSON.stringify(commandCenter).includes("must-not-leak"), false);
+  eq("command center reports visible indicator count", commandCenter.chart.indicatorCount, 1);
+  eq("command center action is ready when chart target exists", commandCenter.status, "ready");
+
+  const candles = Array.from({ length: 80 }, (_, i) => ({
+    epoch: 1000 + i * 900,
+    open: 100 + i * 0.5,
+    high: 101 + i * 0.5,
+    low: 99 + i * 0.5,
+    close: 100.6 + i * 0.5,
+  }));
+  const rules = JSON.parse(readFileSync("rules.json", "utf8"));
+  const analysis = analyzeChartCandles({ symbol: "VOLATILITY_75", timeframe: "15", candles, rules });
+  eq("chart analyst keeps execution approval false", analysis.executionApproved, false);
+  eq("chart analyst detects bullish bias on rising fixture", analysis.bias, "bullish");
+  truthy("chart analyst returns EMA RSI ATR snapshot", analysis.indicators.ema > 0 && analysis.indicators.rsi > 0 && analysis.indicators.atr > 0);
+  truthy("chart analyst returns a next action", ["watch", "wait", "skip"].includes(analysis.nextAction));
+
+  const scanned = scanWatchlist({
+    rules,
+    symbolCandles: {
+      VOLATILITY_75: candles,
+      CRASH_500: candles.map(candle => ({ ...candle, close: candle.close + 10 })),
+    },
+  });
+  eq("watchlist scanner returns two symbols", scanned.results.length, 2);
+  eq("watchlist scanner marks Crash research-only", scanned.results.find(item => item.symbol === "CRASH_500").executionEligible, false);
+  truthy("watchlist scanner ranks results", scanned.results[0].rank === 1 && scanned.results[1].rank === 2);
+
+  const strategyBrief = buildStrategyBuilderBrief({ objective: "improve breakout filters", symbols: ["VOLATILITY_75", "CRASH_500"] });
+  eq("strategy builder brief stays research-only", strategyBrief.mode, "research_only");
+  truthy("strategy builder includes candidate generation", strategyBrief.steps.some(step => step.id === "generate_candidates"));
+  truthy("strategy builder marks Crash research-only", strategyBrief.symbols.find(item => item.symbol === "CRASH_500").executionEligible === false);
+
+  const backtestChecklist = buildBacktestOperatorChecklist({ symbols: ["VOLATILITY_75", "VOLATILITY_50"], pineFile: "pine/breakout_retest_v1.pine" });
+  truthy("backtest checklist includes Pine compile", backtestChecklist.steps.some(step => step.id === "pine_compile_check"));
+  truthy("backtest checklist includes Strategy Tester export", backtestChecklist.steps.some(step => step.id === "export_strategy_tester_trades"));
+  truthy("backtest checklist includes validate-backtest", backtestChecklist.steps.some(step => step.command.includes("validate-backtest")));
+
+  const tradeBlocked = buildTradeDeskChecklist({
+    explicitExecutionRequest: false,
+    account: { loginid: "VR000", is_virtual: true },
+    approval: { demoApproved: true },
+    openPositions: [],
+    env: { SYMBOL: "VOLATILITY_75", STAKE_USD: "10", STOP_LOSS_USD: "5" },
+  });
+  eq("trade desk blocks without explicit execution request", tradeBlocked.allowed, false);
+  truthy("trade desk names missing explicit request", tradeBlocked.gates.some(gate => gate.id === "explicit_current_request" && gate.pass === false));
+
+  const tradeAllowed = buildTradeDeskChecklist({
+    explicitExecutionRequest: true,
+    account: { loginid: "VR000", is_virtual: true },
+    approval: { demoApproved: true },
+    openPositions: [],
+    env: { SYMBOL: "VOLATILITY_75", STAKE_USD: "10", STOP_LOSS_USD: "5" },
+  });
+  eq("trade desk allows demo when all gates pass", tradeAllowed.allowed, true);
+
+  const reportDir = "state-test-jarvis-reports";
+  try {
+    rmSync(reportDir, { recursive: true, force: true });
+    const report = writeJarvisReport({ report: { kind: "chart-analysis", analysis }, outputDir: reportDir, now: new Date("2026-05-05T17:40:00Z") });
+    eq("Jarvis report writes JSON file", existsSync(report.path), true);
+    const saved = JSON.parse(readFileSync(report.path, "utf8"));
+    eq("Jarvis report preserves report kind", saved.kind, "chart-analysis");
+  } finally {
+    rmSync(reportDir, { recursive: true, force: true });
+  }
+
+  const cli = spawnSync(process.execPath, ["scripts/jarvis.js", "plan", "--json"], {
+    encoding: "utf8",
+    shell: false,
+  });
+  eq("jarvis plan CLI exits cleanly", cli.status, 0);
+  const cliPlan = JSON.parse(cli.stdout);
+  truthy("jarvis plan CLI returns roadmap layers", cliPlan.layers.length === 7);
+
+  const cliDir = "state-test-jarvis-cli";
+  try {
+    rmSync(cliDir, { recursive: true, force: true });
+    mkdirSync(cliDir, { recursive: true });
+    writeFileSync(`${cliDir}/watchlist.json`, JSON.stringify({ symbolCandles: { VOLATILITY_75: candles, CRASH_500: candles } }));
+    const scanCli = spawnSync(process.execPath, ["scripts/jarvis.js", "scan", "--file", `${cliDir}/watchlist.json`, "--json"], {
+      encoding: "utf8",
+      shell: false,
+    });
+    eq("jarvis scan CLI accepts documented --file", scanCli.status, 0);
+    const cliScan = JSON.parse(scanCli.stdout);
+    eq("jarvis scan CLI returns watchlist results", cliScan.results.length, 2);
+    eq("jarvis scan CLI keeps Crash research-only", cliScan.results.find(item => item.symbol === "CRASH_500").executionEligible, false);
+  } finally {
+    rmSync(cliDir, { recursive: true, force: true });
+  }
+});
+
 await group("Windows TradingView launcher", () => {
   const launcher = readFileSync("launch.ps1", "utf8");
   eq("launcher is not tied to TradingView 3.1.0.7818", launcher.includes("TradingView.Desktop_3.1.0.7818"), false);
@@ -722,6 +843,10 @@ await group("codex mcp bridge", async () => {
   truthy("lists strategy autonomy status tool", names.includes("strategy_autonomy_status"));
   truthy("lists strategy autonomy plan tool", names.includes("strategy_autonomy_plan"));
   truthy("lists strategy candidate backtest tool", names.includes("strategy_candidate_backtest"));
+  truthy("lists Jarvis command center tool", names.includes("jarvis_command_center"));
+  truthy("lists Jarvis analyze chart tool", names.includes("jarvis_analyze_chart"));
+  truthy("lists Jarvis scan watchlist tool", names.includes("jarvis_scan_watchlist"));
+  truthy("lists Jarvis trade desk tool", names.includes("jarvis_trade_desk_check"));
   eq("live trade tool hidden by default", names.includes("deriv_place_multiplier_trade"), false);
 
   const health = await tools.call("tv_health_check", {});
@@ -835,6 +960,26 @@ await group("codex mcp bridge", async () => {
   const autonomyBacktest = await tools.call("strategy_candidate_backtest", { symbol: "VOLATILITY_75", candles: autonomyBacktestCandles });
   truthy("autonomy MCP backtest returns ranked candidates", autonomyBacktest.results.length >= 3);
   truthy("autonomy MCP backtest keeps results research-only", autonomyBacktest.results.every(result => result.executionApproved === false));
+
+  const jarvisCenter = await tools.call("jarvis_command_center", { symbol: "VOLATILITY_75", timeframe: "15" });
+  eq("Jarvis MCP command center returns symbol", jarvisCenter.chart.symbol, "VOLATILITY_75");
+  eq("Jarvis MCP command center includes indicator count", jarvisCenter.chart.indicatorCount, 1);
+
+  const jarvisAnalysis = await tools.call("jarvis_analyze_chart", { symbol: "VOLATILITY_75", timeframe: "15", candles: autonomyBacktestCandles });
+  eq("Jarvis MCP analysis remains unapproved for execution", jarvisAnalysis.executionApproved, false);
+  truthy("Jarvis MCP analysis returns bias", ["bullish", "bearish", "neutral"].includes(jarvisAnalysis.bias));
+
+  const jarvisScan = await tools.call("jarvis_scan_watchlist", { symbolCandles: { VOLATILITY_75: autonomyBacktestCandles, CRASH_500: autonomyBacktestCandles } });
+  eq("Jarvis MCP scanner marks Crash research-only", jarvisScan.results.find(item => item.symbol === "CRASH_500").executionEligible, false);
+
+  const jarvisTradeDesk = await tools.call("jarvis_trade_desk_check", {
+    explicitExecutionRequest: false,
+    account: { loginid: "VR000", is_virtual: true },
+    approval: { demoApproved: true },
+    openPositions: [],
+    env: { SYMBOL: "VOLATILITY_75", STAKE_USD: "10", STOP_LOSS_USD: "5" },
+  });
+  eq("Jarvis MCP trade desk fails closed without explicit request", jarvisTradeDesk.allowed, false);
 
   const liveEnabledTools = createCodexTools({
     allowLiveTrading: true,

@@ -57,6 +57,10 @@ Deriv multiplier stakes are locally blocked below `$1.00`; old `0.001` lot-size 
 | Command | What it does |
 | --- | --- |
 | `npm test` | Run the local test suite with no network calls |
+| `npm run jarvis -- plan --json` | Show the Trading Jarvis command-center roadmap and guardrails |
+| `npm run jarvis -- analyze --file <candle-json> --json` | Analyze a candle set for chart bias, setup quality, and next action without approving execution |
+| `npm run jarvis -- scan --file <watchlist-json> --json` | Rank watchlist candle sets while marking non-execution symbols as research-only |
+| `npm run jarvis -- trade-desk --json` | Run a fail-closed trade-desk checklist before any explicit demo/live request |
 | `npm run dry-run` | Connect to Deriv, evaluate strategy, log decision — no order |
 | `npm run codex:autonomy -- status` | Show Codex Autonomy Lab capabilities and guardrails |
 | `npm run codex:autonomy -- plan --symbols=VOLATILITY_75,CRASH_500` | Build a research-only strategy mission plan |
@@ -231,8 +235,11 @@ The bridge exposes read and dry-run tools by default:
 - `tv_research_set_chart`
 - `strategy_evaluate_dry_run`
 - `strategy_autonomy_status` / `strategy_autonomy_plan` / `strategy_candidate_backtest`
+- `jarvis_command_center` / `jarvis_analyze_chart` / `jarvis_scan_watchlist` / `jarvis_trade_desk_check`
 
 `deriv_candles` and `tv_set_chart` remain execution-shaped V75/V50 tools. Use the `research` tools for broad Deriv symbol study, including Crash/Boom, Jump, Step, Range Break, baskets, Bull/Bear, and additional Volatility indices. Research tools do not make a symbol execution-eligible.
+
+Trading Jarvis command-center tools are operator tools. They summarize chart/account/tool state, analyze candles, rank watchlists, and check trade readiness. They do not write `.env`, widen `rules.json`, write backtest approval, or place orders.
 
 Codex Autonomy Lab is research-only. It can plan a mission, fetch/score candidate strategies from candle JSON, and identify promotion steps, but it does not edit `.env`, widen `rules.json`, write backtest approval, or place orders. A candidate can move toward execution only after explicit strategy work, TradingView validation, exported Strategy Tester trades, and `npm run validate-backtest <csv...>`.
 

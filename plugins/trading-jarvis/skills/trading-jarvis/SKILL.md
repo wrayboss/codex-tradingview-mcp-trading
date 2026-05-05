@@ -27,6 +27,11 @@ Use these from repo root:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\plugins\trading-jarvis\scripts\install-local-plugin.ps1
 npm test
+npm run jarvis -- plan --json
+npm run jarvis -- command-center --json
+npm run jarvis -- analyze --file <candle-json> --json
+npm run jarvis -- scan --file <watchlist-json> --json
+npm run jarvis -- trade-desk --json
 npm run codex:autonomy -- status
 npm run codex:autonomy -- plan --symbols=VOLATILITY_75,VOLATILITY_50
 npm run codex:doctor
@@ -66,6 +71,10 @@ Prefer the Codex MCP bridge when the task is chart/account interaction:
 - `strategy_autonomy_status`: inspect Codex research/build/test/backtest capabilities and guardrails.
 - `strategy_autonomy_plan`: build a research-only mission plan for candidate strategy work.
 - `strategy_candidate_backtest`: score deterministic local candidate strategies from candle JSON or inline candles.
+- `jarvis_command_center`: summarize chart, indicators, account metadata, screenshot availability, and Pine errors.
+- `jarvis_analyze_chart`: analyze candle context, indicator posture, setup quality, invalidation, and next action without execution approval.
+- `jarvis_scan_watchlist`: rank many candle sets and keep research-only symbols out of execution.
+- `jarvis_trade_desk_check`: fail-closed checklist for explicit demo/live requests before any order command is considered.
 
 If the external TradingView MCP server exists, proxied tools may also be available for quote data, strategy results, replay, Pine compile, drawings, alerts, panels, tabs, layouts, and screenshots.
 
@@ -74,11 +83,13 @@ If the external TradingView MCP server exists, proxied tools may also be availab
 When the user asks for live chart analysis or a manual-trade brief:
 
 1. Run or call `tv_health_check`.
-2. Confirm the active chart with `tv_get_state`; switch with `tv_set_chart` if requested.
+2. Confirm the active chart with `tv_get_state`; switch execution symbols with `tv_set_chart`, or broad research symbols with `tv_research_set_chart`.
 3. Capture the chart with `tv_capture_screenshot` when visual context matters.
 4. Fetch candles with `deriv_candles` for the same symbol/timeframe.
 5. Compare chart context against `rules.json`: 1H structure, 15m entry, breakout, retest, confirmation candle, EMA50, RSI14, ATR risk.
 6. Give a concise brief: bias, setup quality, invalidation, risk notes, and what would make the setup invalid. Label uncertainty explicitly.
+
+Use `jarvis_command_center` first when the user wants a full TradingView assistant view. It is the local command-center summary for "what can Jarvis see and do right now"; pair it with `jarvis_analyze_chart` or `jarvis_scan_watchlist` after candles are available.
 
 ## Strategy Improvement Workflow
 
