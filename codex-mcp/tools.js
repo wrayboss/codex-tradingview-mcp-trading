@@ -723,7 +723,6 @@ export function createCodexTools({
       const client = derivClientFactory({ requireToken: false });
       try {
         if (client.connect) await client.connect();
-        if (client.authorize) await client.authorize();
         const resolved = resolveResearchSymbol(args.symbol);
         const candles = await client.candles({
           symbol: normalizeDerivResearchSymbol(args.symbol),

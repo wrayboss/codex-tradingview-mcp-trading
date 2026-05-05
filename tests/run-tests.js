@@ -705,6 +705,36 @@ await group("codex mcp bridge", async () => {
   eq("research candles accepts Crash symbol", researchCandles.symbol, "CRASH500");
   eq("research candles uses no-auth client mode", derivFactoryCalls.at(-1).requireToken, false);
 
+  let researchAuthorizeCalls = 0;
+  const noAuthResearchTools = createCodexTools({
+    allowLiveTrading: false,
+    externalTradingViewTools: [],
+    tvClient: {
+      health: async () => ({}),
+      state: async () => ({}),
+      listIndicators: async () => ([]),
+      addIndicator: async () => ({}),
+      removeIndicator: async () => ({}),
+      setChart: async () => ({}),
+      injectPineSource: async () => ({}),
+      getPineErrors: async () => ({}),
+      captureScreenshot: async () => ({}),
+    },
+    derivClientFactory: () => ({
+      connect: async () => {},
+      authorize: async () => {
+        researchAuthorizeCalls++;
+        throw new Error("research candles should not require authorization");
+      },
+      candles: async () => ([{ epoch: 1, open: 1, high: 2, low: 0.5, close: 1.5 }]),
+      close: () => {},
+    }),
+    strategyEvaluator: async () => ({}),
+  });
+  const noAuthResearchCandles = await noAuthResearchTools.call("deriv_research_candles", { symbol: "CRASH_500", granularity: 900, count: 1 });
+  eq("research candles works without authorization", noAuthResearchCandles.symbol, "CRASH500");
+  eq("research candles skips authorize", researchAuthorizeCalls, 0);
+
   const liveEnabledTools = createCodexTools({
     allowLiveTrading: true,
     tvClient: {
