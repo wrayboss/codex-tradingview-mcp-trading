@@ -14,6 +14,14 @@ import {
   resolveResearchSymbol,
   toTradingViewSymbol,
 } from "../src/derivSymbolRegistry.js";
+import {
+  backtestCandidateSet,
+  buildAutonomyPlan,
+  buildAutonomyStatus,
+  generateStrategyCandidates,
+  loadCandlePayload,
+  rankBacktestResults,
+} from "../src/strategyAutonomy.js";
 import { validateDerivTradeSize } from "../src/tradeConstraints.js";
 
 export { normalizeSyntheticSymbol };
@@ -746,6 +754,78 @@ export function createCodexTools({
     "strategy_evaluate_dry_run",
     textSchema("Run the existing strategy in dry-run mode. This never places orders."),
     async (args) => strategyEvaluator(args),
+  );
+
+  addTool(
+    "strategy_autonomy_status",
+    textSchema("Return Codex Autonomy Lab capabilities and safety boundaries. This never places orders."),
+    async () => buildAutonomyStatus(),
+  );
+
+  addTool(
+    "strategy_autonomy_plan",
+    textSchema(
+      "Build a research-only mission plan for Codex to research, test, and backtest candidate strategies without execution approval.",
+      {
+        objective: { type: "string", default: "research and rank new strategy candidates" },
+        symbols: { type: "array", items: { type: "string" }, default: ["VOLATILITY_75", "VOLATILITY_50"] },
+        candleCount: { type: "number", default: 500 },
+        granularity: { type: "number", default: 900 },
+      },
+    ),
+    async (args) => buildAutonomyPlan({
+      objective: args.objective || "research and rank new strategy candidates",
+      symbols: Array.isArray(args.symbols) && args.symbols.length ? args.symbols : ["VOLATILITY_75", "VOLATILITY_50"],
+      candleCount: args.candleCount || 500,
+      granularity: args.granularity || 900,
+    }),
+  );
+
+  addTool(
+    "strategy_candidate_backtest",
+    textSchema(
+      "Run local research-only candidate strategy backtests from inline candles or an ignored research candle JSON file. Results do not approve execution.",
+      {
+        symbol: { type: "string", default: "VOLATILITY_75" },
+        candleFile: { type: "string", description: "Optional repo-local JSON file from state/research/candles." },
+        candles: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              epoch: { type: "number" },
+              open: { type: "number" },
+              high: { type: "number" },
+              low: { type: "number" },
+              close: { type: "number" },
+            },
+            required: ["open", "high", "low", "close"],
+            additionalProperties: true,
+          },
+        },
+      },
+    ),
+    async (args) => {
+      let candles = args.candles;
+      let symbol = args.symbol || "VOLATILITY_75";
+      let source = "inline";
+      if ((!Array.isArray(candles) || !candles.length) && args.candleFile) {
+        const payload = loadCandlePayload(args.candleFile);
+        candles = payload.candles;
+        symbol = args.symbol || payload.symbol || symbol;
+        source = args.candleFile;
+      }
+      const candidates = generateStrategyCandidates({ symbol });
+      const results = rankBacktestResults(backtestCandidateSet({ candles, candidates }));
+      return {
+        mode: "research_only",
+        symbol,
+        source,
+        results,
+        executionApproved: false,
+        promotionRequired: true,
+      };
+    },
   );
 
   if (allowLiveTrading) {

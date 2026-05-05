@@ -14,10 +14,13 @@ Codex Strategy Lab is the research/operator layer for Deriv derived-market work.
 
 ```powershell
 npm run codex:doctor
+npm run codex:autonomy -- status
+npm run codex:autonomy -- plan --symbols=VOLATILITY_75,CRASH_500 --objective="rank research candidates"
 npm run research:symbols
 npm run research:symbols -- --json
 npm run research:candles -- VOLATILITY_75 --count=500 --granularity=900
 npm run research:candles -- CRASH_500 --count=500 --granularity=900
+npm run codex:autonomy -- backtest --file state/research/candles/VOLATILITY_75-900s-500.json
 ```
 
 `npm run codex:doctor` prints a redacted local readiness report. It never prints `DERIV_API_TOKEN`.
@@ -25,6 +28,8 @@ npm run research:candles -- CRASH_500 --count=500 --granularity=900
 `npm run research:symbols` fetches Deriv `active_symbols` without account authorization when possible, then normalizes records into Codex aliases and TradingView chart names. Use `--offline` for the repo fallback catalogue.
 
 `npm run research:candles` fetches read-only Deriv candles and writes JSON under `state/research/candles/`, which is ignored by Git through the existing `state/` rule.
+
+`npm run codex:autonomy` is the guarded local research loop. It reports available Codex capabilities, builds a mission plan, and ranks deterministic candidate strategy ideas against candle JSON. It never approves execution, writes `.env`, edits `rules.json`, or places orders.
 
 ## MCP Tools
 
@@ -40,6 +45,9 @@ Research-shaped tools are broad and read-only:
 - `deriv_active_symbols`: current Deriv derived/synthetic symbol catalogue.
 - `deriv_research_candles`: read-only candles for any known research symbol.
 - `tv_research_set_chart`: chart navigation for any known research symbol.
+- `strategy_autonomy_status`: current Codex autonomy capabilities and guardrails.
+- `strategy_autonomy_plan`: research-only mission plan for symbols and candle counts.
+- `strategy_candidate_backtest`: local candidate-strategy scoring from inline candles or a repo-local candle JSON file.
 
 ## Symbol Source
 
