@@ -134,7 +134,7 @@ confirmShort = inWindowShort and ((isBear and bodyOk) or bearPin or bearEng) and
 
 // ============ DAILY CAP ============
 var int dailyTrades = 0
-if ta.change(time("1D"))
+if timeframe.change("1D")
     dailyTrades := 0
 
 // ============ ENTRIES ============
