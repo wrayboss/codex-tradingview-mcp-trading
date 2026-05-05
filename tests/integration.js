@@ -11,6 +11,8 @@ import { monitorContract } from "../src/contractMonitor.js";
 import { RiskManager } from "../src/riskManager.js";
 import { loadRules }   from "../src/rulesLoader.js";
 import { computeApprovalFingerprint } from "../src/approvalFingerprint.js";
+import { appendSettlementCsvRowOnce } from "../src/artifacts.js";
+import { loadTradeEvents } from "../src/tradeJournal.js";
 
 const rules   = loadRules("./rules.json");
 const TMPDIR  = "state-test-tmp";
@@ -394,9 +396,10 @@ export const integrationTests = [
         approvedBacktest(dir);
         const risk    = makeRisk();
         const factory = makeMockClient({ ltfCandles: signalLtfCandles(), htfCandles: htfWithPivot() });
+        const journalFile = `${dir}/trade-events.jsonl`;
         const result  = await runCycle(baseConfig, rules, risk, {
           dryRun: false, monitorSettlement: false,
-          stateDir: dir, clientFactory: factory,
+          stateDir: dir, clientFactory: factory, tradeEventsFile: journalFile,
         });
         truthy("result returned", result != null);
         eq("mode is LIVE", result?.mode, "LIVE");
@@ -405,6 +408,8 @@ export const integrationTests = [
         eq("side is long", result?.side, "long");
         truthy("proposal called", factory()._calls.proposal > 0);
         eq("buy called once", factory()._calls.buy, 1);
+        const events = loadTradeEvents({ filePath: journalFile }).events;
+        eq("ORDER_FILLED journal event is created after fill in mocked runCycle live path", events.filter(event => event.eventType === "ORDER_FILLED").length, 1);
       } finally { cleanTmp(dir); }
     },
   },
@@ -463,9 +468,13 @@ export const integrationTests = [
   {
     name: "reconcileUnsettled — marks settled contract as win",
     async run(eq, truthy) {
+      const dir = `${TMPDIR}-reconcile`;
       const risk = makeRisk();
+      const csvFile = `${dir}/trades.csv`;
+      const journalFile = `${dir}/trade-events.jsonl`;
       const trade = {
         contractId: "C789", orderPlaced: true, outcome: null, pnl_usd: null,
+        symbol: "VOLATILITY_75", derivSymbol: "R_75", mode: "LIVE", side: "long", epoch: 0, stakeUsd: 10, multiplier: 50, price: 100,
         timestamp: new Date().toISOString(), epoch: 0,
       };
       risk.history.trades.push(trade);
@@ -474,9 +483,18 @@ export const integrationTests = [
         contractStatus: async () => ({ proposal_open_contract: { is_sold: true, profit: 7.5 } }),
       };
 
-      await reconcileUnsettled(risk, client);
+      try {
+        mkdirSync(dir, { recursive: true });
+        await reconcileUnsettled(risk, client, { settlementCsvFile: csvFile, tradeEventsFile: journalFile, nowFn: () => new Date("2026-05-04T12:00:00.000Z") });
+        await reconcileUnsettled(risk, client, { settlementCsvFile: csvFile, tradeEventsFile: journalFile, nowFn: () => new Date("2026-05-04T12:05:00.000Z") });
+      } finally {}
       eq("outcome updated to win", trade.outcome, "win");
       eq("pnl_usd set correctly", trade.pnl_usd, 7.5);
+      const csvLines = readFileSync(csvFile, "utf8").trim().split(/\r?\n/);
+      eq("reconcileUnsettled does not append duplicate settlement rows when run twice", csvLines.length, 2);
+      const events = loadTradeEvents({ filePath: journalFile }).events;
+      eq("reconcile journal event is written once", events.filter(event => event.eventType === "RECONCILE_SETTLEMENT_RECORDED").length, 1);
+      cleanTmp(dir);
     },
   },
 
@@ -486,12 +504,14 @@ export const integrationTests = [
       const dir = `${TMPDIR}-monitor`;
       const logFile = `${dir}/safety-check-log.json`;
       const csvFile = `${dir}/trades.csv`;
+      const journalFile = `${dir}/trade-events.jsonl`;
       try {
         mkdirSync(dir, { recursive: true });
         const risk = makeRisk(logFile);
         const decision = {
           timestamp: "2026-04-28T12:00:00.000Z",
           symbol: "VOLATILITY_75",
+          derivSymbol: "R_75",
           side: "long",
           stakeUsd: 10,
           multiplier: 50,
@@ -514,6 +534,7 @@ export const integrationTests = [
           pollMs: 0,
           timeoutMs: 1000,
           settlementCsvFile: csvFile,
+          tradeEventsFile: journalFile,
           nowFn: () => new Date("2026-04-28T12:05:00.000Z"),
         });
 
@@ -523,6 +544,58 @@ export const integrationTests = [
         eq("history saved numeric pnl", saved.trades[0].pnl_usd, 7.5);
         const csv = readFileSync(csvFile, "utf8");
         truthy("settlement row includes SETTLE mode", csv.includes(",SETTLE,win,7.50,"));
+        const events = loadTradeEvents({ filePath: journalFile }).events;
+        eq("monitor settlement journal event is written once", events.filter(event => event.eventType === "SETTLEMENT_RECORDED").length, 1);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
+    name: "single-cycle settlement path does not duplicate settlement row when settlement already exists",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-single-settle`;
+      const csvFile = `${dir}/trades.csv`;
+      const logFile = `${dir}/safety-check-log.json`;
+      try {
+        mkdirSync(dir, { recursive: true });
+        const decision = {
+          timestamp: "2026-05-04T12:00:00.000Z",
+          symbol: "VOLATILITY_75",
+          derivSymbol: "R_75",
+          side: "long",
+          contractId: "CBOT1",
+          outcome: "win",
+          pnl_usd: 4.25,
+          mode: "LIVE",
+          orderPlaced: true,
+        };
+        appendSettlementCsvRowOnce(decision, { filePath: csvFile });
+        const result = appendSettlementCsvRowOnce(decision, { filePath: csvFile });
+        const lines = readFileSync(csvFile, "utf8").trim().split(/\r?\n/);
+        eq("monitorContract/bot settlement path does not duplicate settlement rows when settlement already exists", lines.length, 2);
+        eq("duplicate settlement returns appended false", result.appended, false);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
+    name: "no-signal dry-run records a decision journal event",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-journal-decision`;
+      try {
+        const risk = makeRisk(`${dir}-risk-log.json`);
+        const factory = makeMockClient({ ltfCandles: flatLtfCandles(60), htfCandles: flatHtfCandles(20) });
+        const journalFile = `${dir}/trade-events.jsonl`;
+        const result = await runCycle(baseConfig, rules, risk, {
+          dryRun: true,
+          monitorSettlement: false,
+          stateDir: dir,
+          clientFactory: factory,
+          tradeEventsFile: journalFile,
+        });
+        truthy("result returned", result != null);
+        const events = loadTradeEvents({ filePath: journalFile }).events;
+        eq("DECISION_RECORDED journal event is created in dry-run/no-signal path", events.filter(event => event.eventType === "DECISION_RECORDED").length, 1);
       } finally { cleanTmp(dir); }
     },
   },

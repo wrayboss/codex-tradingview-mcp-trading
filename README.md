@@ -158,6 +158,15 @@ Stop with `Ctrl+C` — the lock is released on shutdown.
 
 For a blocking one-cycle live run, use `npm run trade`; single-cycle mode monitors an opened contract until Deriv reports settlement and then appends a `SETTLE` row to `trades.csv`.
 
+## Trade Journal and Settlement Truth
+
+- `state/trade-events.jsonl` is a local append-only runtime audit journal for trade decisions, filled orders, and settlements.
+- Journal events are written with deterministic IDs so repeated reconcile or monitor passes do not append duplicate event lines for the same decision or contract settlement.
+- `trades.csv` settlement rows are idempotent by Deriv contract ID. A `SETTLE` row is appended once per `Contract ID`; later monitor/reconcile passes skip duplicates.
+- Reconciliation can be safely rerun. If Deriv reports a contract as sold more than once, the bot does not duplicate settlement accounting artifacts in the journal or CSV.
+- Runtime artifacts remain Git-ignored, including `state/`, `safety-check-log.json`, and `trades.csv`.
+- This hardening does not change breakout, retest, confirmation, indicator, or entry behavior.
+
 ## Local Artifact Migration
 
 On startup, the bot prepares local runtime files before it reads or writes trading state:
@@ -165,6 +174,7 @@ On startup, the bot prepares local runtime files before it reads or writes tradi
 - Existing `trades.csv` files with the old BitGet/BTC schema are renamed to `trades.legacy-YYYYMMDD-HHMMSS.csv`, then a fresh Deriv CSV header is written.
 - Existing `safety-check-log.json` files without the current `schemaVersion` are renamed to `safety-check-log.legacy-YYYYMMDD-HHMMSS.json`, then a fresh empty log is written.
 - `state/` is created locally and ignored by Git. The bot does not create the old shared `state/traded-levels.json`; live fills write per-symbol files such as `state/traded-levels-R_75.json`.
+- `state/trade-events.jsonl` is created locally as an append-only audit journal; invalid JSONL lines are ignored on load so the runtime can continue safely.
 - If an old shared `state/traded-levels.json` is found, it is migrated to the active symbol's per-symbol file. If that per-symbol file already exists, the shared file is archived instead of being mixed in.
 
 ## Backtest Validation
@@ -262,9 +272,10 @@ node scripts/set-chart.js VOLATILITY_50 15
 | `tests/integration.js` | Integration tests — 11 tests, no network calls |
 | `state/backtest-approved.json` | Gate results — `demoApproved` gates demo trading, `realApproved` gates real trading |
 | `state/bot.pid` | PID lock — prevents concurrent bot instances |
+| `state/trade-events.jsonl` | Append-only local audit journal for decisions, fills, and settlements |
 | `state/traded-levels-R_75.json` | Levels that produced a V75 trade (not re-armed) |
 | `state/traded-levels-R_50.json` | Levels that produced a V50 trade (not re-armed) |
 | `safety-check-log.json` | Decision log (all cycles) |
-| `trades.csv` | Executed signal log with settlement rows |
+| `trades.csv` | Executed signal log with idempotent settlement rows by contract ID |
 
 This is automation infrastructure, not financial advice. Use demo mode and verify all behavior before risking real money.
