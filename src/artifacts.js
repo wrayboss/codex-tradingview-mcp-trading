@@ -118,6 +118,61 @@ export function appendSettlementCsvRow(decision, { filePath = CSV_FILE, settledA
   appendFileSync(filePath, row + "\n");
 }
 
+function parseCsvLine(line) {
+  const values = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      values.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  values.push(current);
+  return values;
+}
+
+export function hasSettlementCsvRow({ filePath = CSV_FILE, contractId } = {}) {
+  if (!contractId || !existsSync(filePath)) return false;
+  const lines = readFileSync(filePath, "utf8").split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return false;
+
+  for (const line of lines.slice(1)) {
+    const columns = parseCsvLine(line);
+    if (String(columns[9] ?? "").trim() === String(contractId).trim() && String(columns[10] ?? "").trim() === "SETTLE") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function appendSettlementCsvRowOnce(decision, { filePath = CSV_FILE, settledAt = new Date() } = {}) {
+  const contractId = String(decision?.contractId ?? "").trim();
+  if (!contractId) {
+    return { appended: false, reason: "missing_contract_id" };
+  }
+  if (hasSettlementCsvRow({ filePath, contractId })) {
+    return { appended: false, reason: "duplicate_contract_id" };
+  }
+  appendSettlementCsvRow(decision, { filePath, settledAt });
+  return { appended: true };
+}
+
 export function csvCell(value) {
   const text = String(value ?? "");
   if (!/[",\r\n]/.test(text)) return text;

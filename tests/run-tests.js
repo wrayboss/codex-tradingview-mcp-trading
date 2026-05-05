@@ -13,11 +13,13 @@ import { RetestTracker } from "../src/retestTracker.js";
 import { evaluateConfirmation } from "../src/confirmation.js";
 import { evaluateTrendFilter } from "../src/trendFilter.js";
 import { RiskManager } from "../src/riskManager.js";
-import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts } from "../src/artifacts.js";
+import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts, appendSettlementCsvRowOnce, hasSettlementCsvRow } from "../src/artifacts.js";
 import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
 import { getOperatorWatchlist, resolveActiveWatchlist, resolveOperatorSymbol } from "../src/watchlist.js";
 import { createCodexTools, normalizeSyntheticSymbol, normalizeTradingViewSyntheticSymbol } from "../codex-mcp/tools.js";
 import { scanRepo } from "../scripts/scan-secrets.js";
+import { createDecisionId, createOrderFilledEventId, createSettlementId } from "../src/tradeIdentity.js";
+import { appendTradeEventOnce, loadTradeEvents, hasTradeEvent, TRADE_EVENT_SCHEMA_VERSION } from "../src/tradeJournal.js";
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -300,6 +302,90 @@ await group("risk", () => {
   ] };
   eq("consecutive loss cap blocks at threshold", r.canTrade(7200).allowed, false);
   truthy("consecutive loss cap reason is clear", r.canTrade(7200).reason.includes("consecutive loss cap reached"));
+});
+
+await group("trade identity", () => {
+  const baseDecision = {
+    derivSymbol: "R_75",
+    epoch: 1710000000,
+    side: "long",
+    price: 123.45,
+    stakeUsd: 10,
+    multiplier: 50,
+  };
+  eq("createDecisionId deterministic", createDecisionId(baseDecision), createDecisionId({ ...baseDecision }));
+  truthy("createDecisionId changes when core field changes", createDecisionId(baseDecision) !== createDecisionId({ ...baseDecision, price: 123.46 }));
+  eq("createSettlementId uses contractId", createSettlementId({ contractId: "C123" }), "settlement:C123");
+  eq("createSettlementId handles missing contractId safely", createSettlementId({}), null);
+  eq("createOrderFilledEventId uses contractId", createOrderFilledEventId({ contractId: "C123" }), "order-filled:C123");
+});
+
+await group("trade journal", () => {
+  const dir = "state-test-journal";
+  const file = `${dir}/trade-events.jsonl`;
+  try {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const first = appendTradeEventOnce({
+      eventId: "decision:test",
+      eventType: "DECISION_RECORDED",
+      timestamp: "2026-05-04T10:00:00.000Z",
+      schemaVersion: TRADE_EVENT_SCHEMA_VERSION,
+      payload: { ok: true },
+    }, { filePath: file });
+    const duplicate = appendTradeEventOnce({
+      eventId: "decision:test",
+      eventType: "DECISION_RECORDED",
+      timestamp: "2026-05-04T10:00:01.000Z",
+      payload: { ok: false },
+    }, { filePath: file });
+    eq("appendTradeEventOnce appends first event", first.appended, true);
+    eq("appendTradeEventOnce skips duplicate eventId", duplicate.appended, false);
+    eq("hasTradeEvent sees stored id", hasTradeEvent("decision:test", { filePath: file }), true);
+
+    writeFileSync(file, [
+      JSON.stringify({ eventId: "a", eventType: "DECISION_RECORDED", timestamp: "2026-05-04T10:00:00.000Z", schemaVersion: 1, payload: {} }),
+      "{bad-json",
+      JSON.stringify({ eventId: "b", eventType: "ORDER_FILLED", timestamp: "2026-05-04T10:00:01.000Z", schemaVersion: 1, payload: {} }),
+      "",
+    ].join("\n"));
+    const loaded = loadTradeEvents({ filePath: file });
+    eq("loadTradeEvents skips invalid JSONL lines without crashing", loaded.events.length, 2);
+    eq("loadTradeEvents reports skipped invalid lines", loaded.skipped, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+await group("settlement csv idempotency", () => {
+  const dir = "state-test-settlement-csv";
+  const csv = `${dir}/trades.csv`;
+  const decision = {
+    timestamp: "2026-05-04T11:00:00.000Z",
+    symbol: "VOLATILITY_75",
+    side: "long",
+    contractId: "CSET1",
+    outcome: "win",
+    pnl_usd: 7.5,
+  };
+  try {
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    const first = appendSettlementCsvRowOnce(decision, { filePath: csv, settledAt: new Date("2026-05-04T11:01:00.000Z") });
+    const duplicate = appendSettlementCsvRowOnce(decision, { filePath: csv, settledAt: new Date("2026-05-04T11:02:00.000Z") });
+    eq("appendSettlementCsvRowOnce appends first settlement", first.appended, true);
+    eq("appendSettlementCsvRowOnce skips duplicate for same contractId", duplicate.appended, false);
+    eq("hasSettlementCsvRow matches SETTLE row and contract ID", hasSettlementCsvRow({ filePath: csv, contractId: "CSET1" }), true);
+    eq("hasSettlementCsvRow ignores non-matching contract ID", hasSettlementCsvRow({ filePath: csv, contractId: "CSET2" }), false);
+    writeFileSync(csv, [
+      `${CSV_HEADERS}`,
+      `2026-05-04,11:01:00,Deriv,VOLATILITY_75,long,,,,,CSET9,LIVE,,,\"filled\"`,
+      `2026-05-04,11:02:00,Deriv,VOLATILITY_75,long,,,,,CSET9,SETTLE,loss,-5.00,\"settled\"`,
+    ].join("\n"));
+    eq("hasSettlementCsvRow returns true only for SETTLE row with matching contract ID", hasSettlementCsvRow({ filePath: csv, contractId: "CSET9" }), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // Deriv trade constraints

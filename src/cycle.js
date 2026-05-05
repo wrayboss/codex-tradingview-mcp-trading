@@ -14,7 +14,7 @@
  */
 
 import { writeFileSync, existsSync, readFileSync, mkdirSync, renameSync } from "fs";
-import { appendSettlementCsvRow, applySettlement, archiveFile } from "./artifacts.js";
+import { appendSettlementCsvRowOnce, applySettlement, archiveFile } from "./artifacts.js";
 import { DerivClient }          from "./derivClient.js";
 import { findPivots }           from "./pivots.js";
 import { LevelStore }           from "./levels.js";
@@ -26,12 +26,14 @@ import { emaSeries, rsiSeries, atrSeries, smaSeries } from "./indicators.js";
 import { filterInProgress }     from "./candleUtils.js";
 import { monitorContract }      from "./contractMonitor.js";
 import { assertRuntimeLiveSafety, loadCurrentApprovalContext } from "./liveSafetyGate.js";
+import { appendTradeEventOnce } from "./tradeJournal.js";
+import { createDecisionId, createOrderFilledEventId, createSettlementId } from "./tradeIdentity.js";
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ─── Reconcile ─────────────────────────────────────────────────────────────────
 export async function reconcileUnsettled(risk, client, opts = {}) {
-  const unsettled = risk.history.trades.filter(t => t.orderPlaced && !t.outcome && t.contractId);
+  const unsettled = risk.history.trades.filter(t => t.orderPlaced && t.contractId && (!t.outcome || t.pnl_usd == null));
   if (!unsettled.length) return;
   console.log(`[reconcile] Checking ${unsettled.length} unsettled contract(s)...`);
   let updated = 0;
@@ -40,9 +42,32 @@ export async function reconcileUnsettled(risk, client, opts = {}) {
       const r = await client.contractStatus(trade.contractId);
       const c = r?.proposal_open_contract;
       if (c?.is_sold) {
+        if (trade.outcome && trade.pnl_usd != null) continue;
         applySettlement(trade, c);
         if (opts.settlementCsvFile) {
-          appendSettlementCsvRow(trade, { filePath: opts.settlementCsvFile, settledAt: opts.nowFn?.() ?? new Date() });
+          appendSettlementCsvRowOnce(trade, { filePath: opts.settlementCsvFile, settledAt: opts.nowFn?.() ?? new Date() });
+        }
+        const eventId = createSettlementId(trade);
+        if (eventId) {
+          try {
+            appendTradeEventOnce({
+              eventId: `${eventId}:reconcile`,
+              eventType: "RECONCILE_SETTLEMENT_RECORDED",
+              timestamp: (opts.nowFn?.() ?? new Date()).toISOString(),
+              contractId: trade.contractId,
+              decisionId: createDecisionId(trade),
+              symbol: trade.symbol,
+              derivSymbol: trade.derivSymbol,
+              mode: trade.mode,
+              payload: {
+                outcome: trade.outcome,
+                pnl_usd: trade.pnl_usd,
+                source: "reconcile",
+              },
+            }, { filePath: opts.tradeEventsFile });
+          } catch (err) {
+            console.warn(`[journal] Failed to append reconcile settlement event for ${trade.contractId}: ${err.message}`);
+          }
         }
         updated++;
       }
@@ -85,6 +110,7 @@ export async function runCycle(config, rules, risk, opts = {}) {
     nowFn             = () => new Date(),
     settlementCsvFile = null,
     monitorOptions    = {},
+    tradeEventsFile   = undefined,
   } = opts;
 
   const { symbol, derivSymbol, stakeUsd, multiplier, apiToken, appId } = config;
@@ -96,7 +122,7 @@ export async function runCycle(config, rules, risk, opts = {}) {
   const account = await client.authorize();
   console.log(`[deriv] ${account.email} - ${account.is_virtual ? "DEMO" : "LIVE"} | ${account.currency} ${account.balance}`);
 
-  await reconcileUnsettled(risk, client, { settlementCsvFile, nowFn });
+  await reconcileUnsettled(risk, client, { settlementCsvFile, nowFn, tradeEventsFile });
 
   // Session gate
   const session = rules.session ?? { utc_start_hour: 0, utc_end_hour: 24 };
@@ -308,6 +334,54 @@ export async function runCycle(config, rules, risk, opts = {}) {
   }
 
   risk.recordDecision(decision);
+  try {
+    appendTradeEventOnce({
+      eventId: createDecisionId(decision),
+      eventType: "DECISION_RECORDED",
+      timestamp: decision.timestamp,
+      contractId: decision.contractId,
+      decisionId: createDecisionId(decision),
+      symbol,
+      derivSymbol,
+      mode: decision.mode,
+      payload: {
+        side: decision.side,
+        price: decision.price,
+        stakeUsd: decision.stakeUsd,
+        multiplier: decision.multiplier,
+        orderPlaced: decision.orderPlaced,
+        outcome: decision.outcome,
+      },
+    }, { filePath: tradeEventsFile });
+  } catch (err) {
+    console.warn(`[journal] Failed to append decision event: ${err.message}`);
+  }
+
+  if (decision.orderPlaced) {
+    const orderFilledEventId = createOrderFilledEventId(decision);
+    if (orderFilledEventId) {
+      try {
+        appendTradeEventOnce({
+          eventId: orderFilledEventId,
+          eventType: "ORDER_FILLED",
+          timestamp: decision.timestamp,
+          contractId: decision.contractId,
+          decisionId: createDecisionId(decision),
+          symbol,
+          derivSymbol,
+          mode: decision.mode,
+          payload: {
+            side: decision.side,
+            stakeUsd: decision.stakeUsd,
+            multiplier: decision.multiplier,
+            notes: decision.notes,
+          },
+        }, { filePath: tradeEventsFile });
+      } catch (err) {
+        console.warn(`[journal] Failed to append order-filled event for ${decision.contractId}: ${err.message}`);
+      }
+    }
+  }
   console.log(`\n[log] safety-check-log.json updated`);
   console.log("===========================================================\n");
 
@@ -316,6 +390,7 @@ export async function runCycle(config, rules, risk, opts = {}) {
       ...monitorOptions,
       settlementCsvFile,
       nowFn,
+      tradeEventsFile,
     });
   }
 

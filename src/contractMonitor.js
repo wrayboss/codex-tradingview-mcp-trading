@@ -1,4 +1,6 @@
-import { appendSettlementCsvRow, applySettlement } from "./artifacts.js";
+import { appendSettlementCsvRowOnce, applySettlement } from "./artifacts.js";
+import { appendTradeEventOnce } from "./tradeJournal.js";
+import { createDecisionId, createSettlementId } from "./tradeIdentity.js";
 
 const DEFAULT_POLL_MS = 30_000;
 const DEFAULT_TIMEOUT_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -44,7 +46,29 @@ export async function monitorContract(client, contractId, decision, risk, opts =
           const settlement = applySettlement(decision, c);
           risk.save();
           if (opts.settlementCsvFile) {
-            appendSettlementCsvRow(decision, { filePath: opts.settlementCsvFile, settledAt: nowFn() });
+            appendSettlementCsvRowOnce(decision, { filePath: opts.settlementCsvFile, settledAt: nowFn() });
+          }
+          const eventId = createSettlementId(decision);
+          if (eventId) {
+            try {
+              appendTradeEventOnce({
+                eventId,
+                eventType: "SETTLEMENT_RECORDED",
+                timestamp: nowFn().toISOString(),
+                contractId: decision.contractId,
+                decisionId: createDecisionId(decision),
+                symbol: decision.symbol,
+                derivSymbol: decision.derivSymbol,
+                mode: decision.mode,
+              payload: {
+                  outcome: decision.outcome,
+                  pnl_usd: decision.pnl_usd,
+                  source: "monitor",
+                },
+              }, { filePath: opts.tradeEventsFile });
+            } catch (err) {
+              console.warn(`[journal] Failed to append settlement event for ${decision.contractId}: ${err.message}`);
+            }
           }
           console.log(`[monitor] SETTLED - ${decision.outcome.toUpperCase()} | P&L ${pnlStr}`);
           return settlement;

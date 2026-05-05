@@ -10,7 +10,7 @@
 
 import "dotenv/config";
 import { writeFileSync, existsSync, readFileSync, appendFileSync, mkdirSync, unlinkSync } from "fs";
-import { CSV_FILE, CSV_HEADERS, STATE_DIR, appendSettlementCsvRow, prepareRuntimeArtifacts } from "./src/artifacts.js";
+import { CSV_FILE, CSV_HEADERS, STATE_DIR, appendSettlementCsvRowOnce, prepareRuntimeArtifacts } from "./src/artifacts.js";
 import { loadRules }       from "./src/rulesLoader.js";
 import { RiskManager }     from "./src/riskManager.js";
 import { runCycle }        from "./src/cycle.js";
@@ -208,8 +208,12 @@ async function main() {
       if (decision) {
         if (decision.side != null) appendCsv(decision);
         if (decision.outcome) {
-          appendSettlementCsvRow(decision, { filePath: CSV_FILE });
-          console.log(`[log] trades.csv settlement row appended`);
+          const result = appendSettlementCsvRowOnce(decision, { filePath: CSV_FILE });
+          if (result.appended) {
+            console.log(`[log] trades.csv settlement row appended`);
+          } else {
+            console.log(`[log] trades.csv settlement row skipped (${result.reason})`);
+          }
         }
       }
     }

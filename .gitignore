@@ -10,4 +10,5 @@ safety-check-log.legacy-*.json
 trades.csv
 trades.legacy-*.csv
 state/
+state/**/*.jsonl
 state-test-*.json
