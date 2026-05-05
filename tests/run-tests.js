@@ -17,6 +17,12 @@ import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts, append
 import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
 import { getOperatorWatchlist, resolveActiveWatchlist, resolveOperatorSymbol } from "../src/watchlist.js";
 import { createCodexTools, normalizeSyntheticSymbol, normalizeTradingViewSyntheticSymbol } from "../codex-mcp/tools.js";
+import {
+  getResearchSymbolCatalog,
+  normalizeDerivResearchSymbol,
+  resolveResearchSymbol,
+  toTradingViewSymbol,
+} from "../src/derivSymbolRegistry.js";
 import { scanRepo } from "../scripts/scan-secrets.js";
 import { createDecisionId, createOrderFilledEventId, createSettlementId } from "../src/tradeIdentity.js";
 import { appendTradeEventOnce, loadTradeEvents, hasTradeEvent, TRADE_EVENT_SCHEMA_VERSION } from "../src/tradeJournal.js";
@@ -431,6 +437,21 @@ await group("operator watchlist", () => {
   truthy("rejects crash boom symbols", rejectedCrash);
 });
 
+await group("Deriv research symbol registry", () => {
+  const catalog = getResearchSymbolCatalog();
+  truthy("research catalog includes active Deriv synthetic symbols", catalog.length >= 40);
+  truthy("research catalog includes Volatility 75", catalog.some(item => item.derivSymbol === "R_75"));
+  truthy("research catalog includes Crash/Boom for research only", catalog.some(item => item.derivSymbol === "CRASH500") && catalog.some(item => item.derivSymbol === "BOOM500"));
+  truthy("research catalog includes Jump and Step indices", catalog.some(item => item.derivSymbol === "JD75") && catalog.some(item => item.derivSymbol === "stpRNG"));
+  eq("V75 research alias normalizes to Deriv symbol", normalizeDerivResearchSymbol("VOLATILITY_75"), "R_75");
+  eq("Crash 500 research alias normalizes to Deriv symbol", normalizeDerivResearchSymbol("CRASH_500"), "CRASH500");
+  eq("Boom 500 display-derived TradingView symbol", toTradingViewSymbol("BOOM_500"), "DERIV:BOOM_500_INDEX");
+  eq("Volatility 75 existing TradingView symbol preserved", toTradingViewSymbol("R_75"), "DERIV:VOLATILITY_75_INDEX");
+  eq("Volatility 75 1s TradingView symbol", toTradingViewSymbol("VOLATILITY_75_1S"), "DERIV:VOLATILITY_75_1S_INDEX");
+  eq("resolve research symbol marks Crash as non-execution", resolveResearchSymbol("CRASH_500").executionSupported, false);
+  eq("resolve research symbol marks V75 as execution-supported", resolveResearchSymbol("VOLATILITY_75").executionSupported, true);
+});
+
 await group("Trading Jarvis plugin", () => {
   const pluginDir = "plugins/trading-jarvis";
   const result = spawnSync(process.execPath, ["scripts/operator-check.js"], {
@@ -445,6 +466,25 @@ await group("Trading Jarvis plugin", () => {
   truthy("operator check resolves Codex bridge from plugin cwd", output.codexBridge.ok);
   eq("operator check exposes Deriv-only active symbols", output.activeSymbols.join(","), "VOLATILITY_75,VOLATILITY_50");
   eq("operator check exposes two symbol switch commands", output.symbolSwitchCommands.length, 2);
+});
+
+await group("Codex Strategy Lab scripts", () => {
+  const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+  truthy("package exposes codex doctor script", Boolean(pkg.scripts["codex:doctor"]));
+  truthy("package exposes research symbols script", Boolean(pkg.scripts["research:symbols"]));
+  truthy("package exposes research candles script", Boolean(pkg.scripts["research:candles"]));
+
+  const doctor = spawnSync(process.execPath, ["scripts/codex-doctor.js", "--json"], {
+    encoding: "utf8",
+    shell: false,
+    env: { ...process.env, DERIV_API_TOKEN: "redacted-test-token" },
+  });
+  eq("codex doctor exits cleanly", doctor.status, 0);
+  const report = JSON.parse(doctor.stdout);
+  eq("codex doctor reports env presence", report.env.DERIV_API_TOKEN_set, true);
+  eq("codex doctor does not print token value", doctor.stdout.includes("redacted-test-token"), false);
+  eq("codex doctor keeps execution symbols narrow", report.execution.symbols.join(","), "VOLATILITY_75,VOLATILITY_50");
+  truthy("codex doctor reports research catalog size", report.research.catalogCount >= 40);
 });
 
 await group("Windows TradingView launcher", () => {
@@ -543,10 +583,11 @@ await group("codex mcp bridge", async () => {
   let rejected = false;
   try { normalizeSyntheticSymbol("CRASH_500"); }
   catch { rejected = true; }
-  truthy("rejects crash boom symbols", rejected);
+  truthy("execution normalizer still rejects crash boom symbols", rejected);
 
   const tvCalls = [];
   const externalCalls = [];
+  const derivFactoryCalls = [];
   const tools = createCodexTools({
     allowLiveTrading: false,
     externalTradingViewTools: [
@@ -566,11 +607,18 @@ await group("codex mcp bridge", async () => {
       getPineErrors: async () => ({ hasErrors: true, errors: ["line 10: Syntax error"] }),
       captureScreenshot: async (args) => { tvCalls.push(["captureScreenshot", args]); return { path: "state/chart.png", bytes: 12 }; },
     },
-    derivClientFactory: () => ({
+    derivClientFactory: (factoryArgs = {}) => {
+      derivFactoryCalls.push(factoryArgs);
+      return ({
       authorize: async () => ({ loginid: "VR000", is_virtual: true, currency: "USD", balance: 1000 }),
+      activeSymbols: async () => ([
+        { symbol: "R_75", display_name: "Volatility 75 Index", market: "synthetic_index", submarket: "random_index" },
+        { symbol: "BOOM500", display_name: "Boom 500 Index", market: "synthetic_index", submarket: "crash_index" },
+      ]),
       candles: async () => ([{ epoch: 1, open: 1, high: 2, low: 0.5, close: 1.5 }]),
       close: () => {},
-    }),
+    });
+    },
     strategyEvaluator: async () => ({ symbol: "VOLATILITY_75", signal: null, mode: "DRY_RUN" }),
   });
 
@@ -580,6 +628,7 @@ await group("codex mcp bridge", async () => {
   truthy("lists tv add indicator tool", names.includes("tv_add_indicator"));
   truthy("lists tv remove indicator tool", names.includes("tv_remove_indicator"));
   truthy("lists tv set chart tool", names.includes("tv_set_chart"));
+  truthy("lists tv research set chart tool", names.includes("tv_research_set_chart"));
   truthy("lists pine source injection tool", names.includes("tv_inject_pine_source"));
   truthy("lists pine errors tool", names.includes("tv_get_pine_errors"));
   truthy("lists screenshot tool", names.includes("tv_capture_screenshot"));
@@ -587,6 +636,9 @@ await group("codex mcp bridge", async () => {
   truthy("lists external pine source proxy", names.includes("pine_get_source"));
   truthy("lists external capture proxy", names.includes("capture_screenshot"));
   truthy("lists deriv account summary tool", names.includes("deriv_account_summary"));
+  truthy("lists deriv active symbols tool", names.includes("deriv_active_symbols"));
+  truthy("lists deriv candles tool", names.includes("deriv_candles"));
+  truthy("lists deriv research candles tool", names.includes("deriv_research_candles"));
   truthy("lists strategy dry run tool", names.includes("strategy_evaluate_dry_run"));
   eq("live trade tool hidden by default", names.includes("deriv_place_multiplier_trade"), false);
 
@@ -608,16 +660,25 @@ await group("codex mcp bridge", async () => {
   eq("set chart delegates normalized symbol", chart.symbol, "R_75");
   eq("set chart passes timeframe", tvCalls[2][1].timeframe, "15");
 
+  let rejectedExecutionChart = false;
+  try { await tools.call("tv_set_chart", { symbol: "CRASH_500", timeframe: "15" }); }
+  catch { rejectedExecutionChart = true; }
+  truthy("execution chart tool still rejects research-only Crash symbol", rejectedExecutionChart);
+
+  const crashChart = await tools.call("tv_research_set_chart", { symbol: "CRASH_500", timeframe: "15" });
+  eq("research chart accepts Crash symbol", crashChart.symbol, "CRASH500");
+  eq("set chart passes research TradingView symbol", tvCalls[3][1].tradingViewSymbol, "DERIV:CRASH_500_INDEX");
+
   const injected = await tools.call("tv_inject_pine_source", { source: "//@version=5\nindicator('Test')" });
   eq("pine injection delegates source", injected.injected, true);
-  eq("pine injection passes source", tvCalls[3][1].source, "//@version=5\nindicator('Test')");
+  eq("pine injection passes source", tvCalls[4][1].source, "//@version=5\nindicator('Test')");
 
   const pineErrors = await tools.call("tv_get_pine_errors", {});
   eq("pine errors report hasErrors", pineErrors.hasErrors, true);
   eq("pine errors include message", pineErrors.errors[0], "line 10: Syntax error");
 
   const screenshot = await tools.call("tv_capture_screenshot", { path: "state/chart.png" });
-  eq("screenshot delegates path", tvCalls[4][1].path, "state/chart.png");
+  eq("screenshot delegates path", tvCalls[5][1].path, "state/chart.png");
   eq("screenshot returns bytes", screenshot.bytes, 12);
 
   const proxied = await tools.call("chart_get_state", { compact: true });
@@ -628,6 +689,51 @@ await group("codex mcp bridge", async () => {
   const account = await tools.call("deriv_account_summary", {});
   eq("account summary redacts token", "apiToken" in account, false);
   eq("account summary login id", account.loginid, "VR000");
+
+  const activeSymbols = await tools.call("deriv_active_symbols", {});
+  eq("active symbols normalizes Deriv records", activeSymbols.symbols[1].symbol, "BOOM_500");
+  eq("active symbols uses no-auth client mode", derivFactoryCalls.at(-1).requireToken, false);
+
+  const factoryCallsBeforeInvalidCandles = derivFactoryCalls.length;
+  let rejectedExecutionCandles = false;
+  try { await tools.call("deriv_candles", { symbol: "CRASH_500", granularity: 900, count: 1 }); }
+  catch { rejectedExecutionCandles = true; }
+  truthy("execution candles tool still rejects research-only Crash symbol", rejectedExecutionCandles);
+  eq("execution candles rejects unsupported symbol before creating client", derivFactoryCalls.length, factoryCallsBeforeInvalidCandles);
+
+  const researchCandles = await tools.call("deriv_research_candles", { symbol: "CRASH_500", granularity: 900, count: 1 });
+  eq("research candles accepts Crash symbol", researchCandles.symbol, "CRASH500");
+  eq("research candles uses no-auth client mode", derivFactoryCalls.at(-1).requireToken, false);
+
+  let researchAuthorizeCalls = 0;
+  const noAuthResearchTools = createCodexTools({
+    allowLiveTrading: false,
+    externalTradingViewTools: [],
+    tvClient: {
+      health: async () => ({}),
+      state: async () => ({}),
+      listIndicators: async () => ([]),
+      addIndicator: async () => ({}),
+      removeIndicator: async () => ({}),
+      setChart: async () => ({}),
+      injectPineSource: async () => ({}),
+      getPineErrors: async () => ({}),
+      captureScreenshot: async () => ({}),
+    },
+    derivClientFactory: () => ({
+      connect: async () => {},
+      authorize: async () => {
+        researchAuthorizeCalls++;
+        throw new Error("research candles should not require authorization");
+      },
+      candles: async () => ([{ epoch: 1, open: 1, high: 2, low: 0.5, close: 1.5 }]),
+      close: () => {},
+    }),
+    strategyEvaluator: async () => ({}),
+  });
+  const noAuthResearchCandles = await noAuthResearchTools.call("deriv_research_candles", { symbol: "CRASH_500", granularity: 900, count: 1 });
+  eq("research candles works without authorization", noAuthResearchCandles.symbol, "CRASH500");
+  eq("research candles skips authorize", researchAuthorizeCalls, 0);
 
   const liveEnabledTools = createCodexTools({
     allowLiveTrading: true,
