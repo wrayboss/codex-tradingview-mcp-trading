@@ -164,6 +164,19 @@ export function generateStrategyCandidates({ symbol = "VOLATILITY_75" } = {}) {
     },
     {
       ...base,
+      id: `${resolved.symbol}-ema-rsi-momentum-research-v1`,
+      name: "EMA/RSI momentum research V1",
+      family: "ema_rsi_momentum",
+      params: { emaPeriod: 144, rsiPeriod: 14, rsiLong: 62, rsiShort: 38, holdBars: 8, stopAtr: 2.0, takeProfitAtr: 3.0 },
+      evidence: {
+        source: "VOLATILITY_75 15m Deriv candles, 5000 bars, split 3500 train / 1500 test",
+        train: { trades: 211, winRate: 0.5639810426540285, profitFactor: 1.340058065134998, netPoints: 8904.747468741924, maxDrawdownPoints: 2930.2772896084643 },
+        test: { trades: 77, winRate: 0.5714285714285714, profitFactor: 2.0639207799275434, netPoints: 7505.44157069494, maxDrawdownPoints: 958.7591150771841 },
+        executionApproved: false,
+      },
+    },
+    {
+      ...base,
       id: `${resolved.symbol}-rsi-mean-reversion`,
       name: "RSI mean reversion",
       family: "rsi_mean_reversion",
