@@ -42,6 +42,18 @@ npm run codex:autonomy -- backtest --file state/research/candles/VOLATILITY_75-9
 
 `npm run jarvis` is the local Trading Jarvis command center. It can produce roadmap, morning-brief, chart-analysis, watchlist-scan, strategy-builder, backtest-operator, and trade-desk checklists. Analysis, scan, and morning-brief commands remain research/operator surfaces; only the existing validated bot commands can place orders.
 
+## Current Research Candidate
+
+`pine/v75_ema_rsi_momentum_research_v1.pine` mirrors the best current local V75 candidate from `npm run codex:autonomy -- backtest`. It is research-only and does not change live execution eligibility.
+
+Measured against `VOLATILITY_75` 15m Deriv candles, 5000 bars, split 3500 train / 1500 test:
+
+- Params: EMA 144, RSI 14, long RSI >= 62, short RSI <= 38, 8-bar time exit, 2 ATR stop, 3 ATR target.
+- Train: 211 trades, 56.40% win rate, 1.34 profit factor, +8904.75 points, 2930.28 max drawdown points.
+- Test: 77 trades, 57.14% win rate, 2.06 profit factor, +7505.44 points, 958.76 max drawdown points.
+
+This local result is candidate evidence only. It is not a money-ready approval and it must still pass TradingView Strategy Tester export validation through `npm run validate-backtest <csv...>` before demo or live promotion.
+
 ## MCP Tools
 
 Execution-shaped tools remain narrow:

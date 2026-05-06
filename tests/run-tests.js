@@ -597,6 +597,12 @@ await group("Codex Autonomy Lab", () => {
   const candidates = generateStrategyCandidates({ symbol: "VOLATILITY_75" });
   truthy("candidate generator returns multiple ideas", candidates.length >= 3);
   truthy("candidate generator includes no execution approval", candidates.every(candidate => candidate.executionApproved === false));
+  const researchCandidate = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v1");
+  truthy("candidate generator includes tuned V75 research candidate", researchCandidate);
+  eq("tuned research candidate uses EMA 144", researchCandidate.params.emaPeriod, 144);
+  eq("tuned research candidate stays unapproved", researchCandidate.evidence.executionApproved, false);
+  const v50Candidates = generateStrategyCandidates({ symbol: "VOLATILITY_50" });
+  eq("V75 evidence is not attached to V50 candidates", v50Candidates.some(candidate => candidate.id.endsWith("ema-rsi-momentum-research-v1")), false);
 
   const candles = Array.from({ length: 90 }, (_, i) => ({
     epoch: 1000 + i * 900,
@@ -785,6 +791,12 @@ await group("Pine strategy source", () => {
   const source = readFileSync("pine/breakout_retest_v1.pine", "utf8");
   truthy("Pine source is a strategy", /\bstrategy\s*\(/.test(source));
   eq("Pine strategy avoids inert alertcondition calls", /\balertcondition\s*\(/.test(source), false);
+
+  const researchSource = readFileSync("pine/v75_ema_rsi_momentum_research_v1.pine", "utf8");
+  truthy("research Pine source is a strategy", /\bstrategy\s*\(/.test(researchSource));
+  truthy("research Pine uses tuned title", researchSource.includes("V75 EMA RSI Momentum Research V1"));
+  eq("research Pine avoids inert alertcondition calls", /\balertcondition\s*\(/.test(researchSource), false);
+  eq("research Pine keeps EMA plot disabled by default", researchSource.includes('input.bool(false, "Plot EMA"'), true);
 });
 
 await group("TradingView Strategy Tester parsing", () => {
