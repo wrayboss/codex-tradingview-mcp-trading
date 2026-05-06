@@ -14,9 +14,12 @@ Codex Strategy Lab is the research/operator layer for Deriv derived-market work.
 
 ```powershell
 npm run codex:doctor
+npm run runtime:health
 npm run codex:autonomy -- status
 npm run codex:autonomy -- plan --symbols=VOLATILITY_75,CRASH_500 --objective="rank research candidates"
 npm run jarvis -- plan --json
+npm run jarvis -- morning-brief --json
+npm run jarvis -- morning-brief --symbols=VOLATILITY_75,VOLATILITY_50 --include-research=CRASH_500,BOOM_1000 --timeframes=60,15 --json
 npm run jarvis -- analyze --file state/research/candles/VOLATILITY_75-900s-500.json --json
 npm run jarvis -- scan --file state/research/watchlist.json --json
 npm run jarvis -- trade-desk --json
@@ -29,13 +32,15 @@ npm run codex:autonomy -- backtest --file state/research/candles/VOLATILITY_75-9
 
 `npm run codex:doctor` prints a redacted local readiness report. It never prints `DERIV_API_TOKEN`.
 
+`npm run runtime:health` is a read-only local artifact report. It makes no Deriv, TradingView, or network calls and reports safety-log presence, trade counts, unsettled counts, journal line counts, skipped invalid journal lines, backtest approval flags, and CSV settlement rows.
+
 `npm run research:symbols` fetches Deriv `active_symbols` without account authorization when possible, then normalizes records into Codex aliases and TradingView chart names. Use `--offline` for the repo fallback catalogue.
 
 `npm run research:candles` fetches read-only Deriv candles and writes JSON under `state/research/candles/`, which is ignored by Git through the existing `state/` rule.
 
 `npm run codex:autonomy` is the guarded local research loop. It reports available Codex capabilities, builds a mission plan, and ranks deterministic candidate strategy ideas against candle JSON. It never approves execution, writes `.env`, edits `rules.json`, or places orders.
 
-`npm run jarvis` is the local Trading Jarvis command center. It can produce roadmap, chart-analysis, watchlist-scan, strategy-builder, backtest-operator, and trade-desk checklists. Analysis and scan commands remain research/operator surfaces; only the existing validated bot commands can place orders.
+`npm run jarvis` is the local Trading Jarvis command center. It can produce roadmap, morning-brief, chart-analysis, watchlist-scan, strategy-builder, backtest-operator, and trade-desk checklists. Analysis, scan, and morning-brief commands remain research/operator surfaces; only the existing validated bot commands can place orders.
 
 ## MCP Tools
 
@@ -57,7 +62,10 @@ Research-shaped tools are broad and read-only:
 - `jarvis_command_center`: chart/account/tool summary for the Trading Jarvis operator view.
 - `jarvis_analyze_chart`: candle and setup analysis without execution approval.
 - `jarvis_scan_watchlist`: multi-symbol research scan with execution eligibility labels.
+- `jarvis_morning_brief`: read-only morning brief plan with runtime health context, recommended TradingView tasks, and no execution or scheduling.
 - `jarvis_trade_desk_check`: fail-closed readiness checklist for explicit demo/live requests.
+
+Morning brief mode is intentionally future-ready but not automated. It sets `readOnly: true`, `tradeExecutionAllowed: false`, `schedulingEnabled: false`, and `liveTradingEnabled: false`. Future scheduling can be layered with Windows Task Scheduler after review, but this repo does not schedule it yet.
 
 ## Symbol Source
 

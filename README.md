@@ -57,7 +57,9 @@ Deriv multiplier stakes are locally blocked below `$1.00`; old `0.001` lot-size 
 | Command | What it does |
 | --- | --- |
 | `npm test` | Run the local test suite with no network calls |
+| `npm run runtime:health` | Print a read-only local runtime health report from ignored artifacts |
 | `npm run jarvis -- plan --json` | Show the Trading Jarvis command-center roadmap and guardrails |
+| `npm run jarvis -- morning-brief --json` | Build a read-only Jarvis morning brief plan with runtime health context |
 | `npm run jarvis -- analyze --file <candle-json> --json` | Analyze a candle set for chart bias, setup quality, and next action without approving execution |
 | `npm run jarvis -- scan --file <watchlist-json> --json` | Rank watchlist candle sets while marking non-execution symbols as research-only |
 | `npm run jarvis -- trade-desk --json` | Run a fail-closed trade-desk checklist before any explicit demo/live request |
@@ -85,6 +87,8 @@ Every PR must prove the safety and hygiene gates still hold:
 npm test
 npm run codex:check
 npm run scan:secrets
+npm run runtime:health
+npm run jarvis -- morning-brief --json
 node scripts/validate-backtest.js
 ```
 
@@ -184,8 +188,20 @@ For a blocking one-cycle live run, use `npm run trade`; single-cycle mode monito
 - Journal events are written with deterministic IDs so repeated reconcile or monitor passes do not append duplicate event lines for the same decision or contract settlement.
 - `trades.csv` settlement rows are idempotent by Deriv contract ID. A `SETTLE` row is appended once per `Contract ID`; later monitor/reconcile passes skip duplicates.
 - Reconciliation can be safely rerun. If Deriv reports a contract as sold more than once, the bot does not duplicate settlement accounting artifacts in the journal or CSV.
+- Reconciliation logs Deriv contract-status failures separately from local CSV or journal write failures so artifact issues are visible and retriable without being mislabeled as open-contract/network state.
 - Runtime artifacts remain Git-ignored, including `state/`, `safety-check-log.json`, and `trades.csv`.
 - This hardening does not change breakout, retest, confirmation, indicator, or entry behavior.
+
+### Runtime Health
+
+`npm run runtime:health` is read-only. It makes no network, Deriv, or TradingView calls and only inspects local ignored artifacts when present:
+
+- `safety-check-log.json`
+- `trades.csv`
+- `state/trade-events.jsonl`
+- `state/backtest-approved.json`
+
+Use `npm run runtime:health -- --json` for machine-readable output. Missing files are reported as missing and do not make the command fail.
 
 ## Local Artifact Migration
 
@@ -246,10 +262,13 @@ The bridge exposes read and dry-run tools by default:
 - `strategy_evaluate_dry_run`
 - `strategy_autonomy_status` / `strategy_autonomy_plan` / `strategy_candidate_backtest`
 - `jarvis_command_center` / `jarvis_analyze_chart` / `jarvis_scan_watchlist` / `jarvis_trade_desk_check`
+- `jarvis_morning_brief`
 
 `deriv_candles` and `tv_set_chart` remain execution-shaped V75/V50 tools. Use the `research` tools for broad Deriv symbol study, including Crash/Boom, Jump, Step, Range Break, baskets, Bull/Bear, and additional Volatility indices. Research tools do not make a symbol execution-eligible.
 
-Trading Jarvis command-center tools are operator tools. They summarize chart/account/tool state, analyze candles, rank watchlists, and check trade readiness. They do not write `.env`, widen `rules.json`, write backtest approval, or place orders.
+Trading Jarvis command-center tools are operator tools. They summarize chart/account/tool state, analyze candles, rank watchlists, create a read-only morning brief, and check trade readiness. They do not write `.env`, widen `rules.json`, write backtest approval, schedule automation, or place orders.
+
+`npm run jarvis -- morning-brief --json` and the `jarvis_morning_brief` MCP tool build a read-only plan for V75/V50 by default. They can include research-only symbols such as Crash/Boom through `--include-research=CRASH_500,BOOM_1000`, but those symbols are marked `researchOnly` and `executionEligible: false`. The brief recommends chart setup, screenshots, Pine error inspection, candle analysis, and watchlist scanning, and its analysis prompt explicitly excludes trade execution. Future scheduling can use Windows Task Scheduler after review, but scheduling is not implemented in this PR.
 
 Codex Autonomy Lab is research-only. It can plan a mission, fetch/score candidate strategies from candle JSON, and identify promotion steps, but it does not edit `.env`, widen `rules.json`, write backtest approval, or place orders. A candidate can move toward execution only after explicit strategy work, TradingView validation, exported Strategy Tester trades, and `npm run validate-backtest <csv...>`.
 

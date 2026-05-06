@@ -17,6 +17,8 @@ import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts, append
 import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
 import { getOperatorWatchlist, resolveActiveWatchlist, resolveOperatorSymbol } from "../src/watchlist.js";
 import { createCodexTools, normalizeSyntheticSymbol, normalizeTradingViewSyntheticSymbol } from "../codex-mcp/tools.js";
+import { buildRuntimeHealthReport } from "../src/runtimeHealth.js";
+import { formatErrorMessage } from "../src/runtimeWarnings.js";
 import {
   getResearchSymbolCatalog,
   normalizeDerivResearchSymbol,
@@ -36,6 +38,7 @@ import {
   buildBacktestOperatorChecklist,
   buildCommandCenter,
   buildJarvisRoadmap,
+  buildMorningBriefPlan,
   buildStrategyBuilderBrief,
   buildTradeDeskChecklist,
   scanWatchlist,
@@ -381,6 +384,62 @@ await group("trade journal", () => {
   }
 });
 
+await group("runtime warnings", () => {
+  eq("formatErrorMessage handles Error", formatErrorMessage(new Error("network down")), "network down");
+  eq("formatErrorMessage handles string", formatErrorMessage("plain failure"), "plain failure");
+  truthy("formatErrorMessage handles object", formatErrorMessage({ code: "EACCES", message: "permission denied" }).includes("permission denied"));
+});
+
+await group("runtime health", () => {
+  const missingDir = "state-test-runtime-health-missing";
+  const fixtureDir = "state-test-runtime-health-fixture";
+  try {
+    rmSync(missingDir, { recursive: true, force: true });
+    const missing = buildRuntimeHealthReport({ rootDir: missingDir });
+    eq("runtime health handles missing safety log", missing.safetyLog.exists, false);
+    eq("runtime health does not mark missing safety log valid", missing.safetyLog.valid, false);
+    eq("runtime health handles missing trade count", missing.trades.total, 0);
+    eq("runtime health handles missing journal event count", missing.tradeJournal.events, 0);
+
+    rmSync(fixtureDir, { recursive: true, force: true });
+    mkdirSync(`${fixtureDir}/state`, { recursive: true });
+    writeFileSync(`${fixtureDir}/safety-check-log.json`, JSON.stringify({
+      schemaVersion: SAFETY_LOG_SCHEMA_VERSION,
+      trades: [
+        { contractId: "COPEN", orderPlaced: true, outcome: null, pnl_usd: null },
+        { contractId: "CWIN", orderPlaced: true, outcome: "win", pnl_usd: 7.5 },
+        { contractId: "CLOSS", orderPlaced: true, outcome: "loss", pnl_usd: -3 },
+      ],
+    }, null, 2));
+    writeFileSync(`${fixtureDir}/trades.csv`, [
+      CSV_HEADERS,
+      `2026-05-04,11:01:00,Deriv,VOLATILITY_75,long,,,,,CWIN,SETTLE,win,7.50,settled`,
+      `2026-05-04,11:02:00,Deriv,VOLATILITY_50,short,,,,,CLOSS,SETTLE,loss,-3.00,settled`,
+    ].join("\n"));
+    writeFileSync(`${fixtureDir}/state/trade-events.jsonl`, [
+      JSON.stringify({ eventId: "decision:1", eventType: "DECISION_RECORDED" }),
+      "{bad-json",
+      JSON.stringify({ eventId: "settlement:CWIN", eventType: "SETTLEMENT_RECORDED" }),
+    ].join("\n"));
+    writeFileSync(`${fixtureDir}/state/backtest-approved.json`, JSON.stringify({ demoApproved: true, realApproved: false }));
+
+    const report = buildRuntimeHealthReport({ rootDir: fixtureDir });
+    eq("runtime health counts safety log trades", report.trades.total, 3);
+    eq("runtime health counts unsettled trades", report.trades.unsettled, 1);
+    eq("runtime health counts settled wins", report.trades.settledWins, 1);
+    eq("runtime health counts settled losses", report.trades.settledLosses, 1);
+    eq("runtime health reports latest contract id", report.trades.latestContractId, "CLOSS");
+    eq("runtime health counts settlement rows", report.csv.settlementRows, 2);
+    eq("runtime health counts journal events", report.tradeJournal.events, 2);
+    eq("runtime health reports skipped journal lines", report.tradeJournal.skippedInvalidLines, 1);
+    eq("runtime health reports demo approval", report.backtestApproval.demoApproved, true);
+    eq("runtime health reports real approval", report.backtestApproval.realApproved, false);
+  } finally {
+    rmSync(missingDir, { recursive: true, force: true });
+    rmSync(fixtureDir, { recursive: true, force: true });
+  }
+});
+
 await group("settlement csv idempotency", () => {
   const dir = "state-test-settlement-csv";
   const csv = `${dir}/trades.csv`;
@@ -650,6 +709,21 @@ await group("Trading Jarvis command center", () => {
   });
   eq("trade desk allows demo when all gates pass", tradeAllowed.allowed, true);
 
+  const morningBrief = buildMorningBriefPlan({
+    includeResearch: ["CRASH_500", "BOOM_1000"],
+    runtimeHealth: { trades: { unsettled: 1 }, csv: { settlementRows: 2 } },
+    toolAvailability: { tv_set_chart: true, tv_capture_screenshot: true, tv_get_pine_errors: true },
+  });
+  eq("morning brief is read-only", morningBrief.readOnly, true);
+  eq("morning brief disables trade execution", morningBrief.tradeExecutionAllowed, false);
+  eq("morning brief disables scheduling", morningBrief.schedulingEnabled, false);
+  truthy("morning brief includes V75 by default", morningBrief.symbols.some(item => item.symbol === "VOLATILITY_75"));
+  truthy("morning brief includes V50 by default", morningBrief.symbols.some(item => item.symbol === "VOLATILITY_50"));
+  eq("morning brief marks Crash research-only", morningBrief.symbols.find(item => item.symbol === "CRASH_500").executionEligible, false);
+  eq("morning brief marks Boom research-only", morningBrief.symbols.find(item => item.symbol === "BOOM_1000").researchOnly, true);
+  truthy("morning brief includes TradingView screenshot task", morningBrief.recommendedTradingViewTasks.some(task => task.id === "capture_screenshot"));
+  truthy("morning brief analysis prompt forbids execution", morningBrief.analysisPrompt.includes("no trade execution"));
+
   const reportDir = "state-test-jarvis-reports";
   try {
     rmSync(reportDir, { recursive: true, force: true });
@@ -668,6 +742,21 @@ await group("Trading Jarvis command center", () => {
   eq("jarvis plan CLI exits cleanly", cli.status, 0);
   const cliPlan = JSON.parse(cli.stdout);
   truthy("jarvis plan CLI returns roadmap layers", cliPlan.layers.length === 7);
+
+  const morningCli = process.platform === "win32"
+    ? spawnSync("cmd.exe", ["/d", "/s", "/c", "npm", "run", "jarvis", "--", "morning-brief", "--json"], {
+      encoding: "utf8",
+      shell: false,
+    })
+    : spawnSync("npm", ["run", "jarvis", "--", "morning-brief", "--json"], {
+    encoding: "utf8",
+      shell: false,
+    });
+  eq("npm run jarvis -- morning-brief --json exits cleanly", morningCli.status, 0);
+  const morningCliStdout = morningCli.stdout || morningCli.output?.filter(Boolean).join("");
+  const morningCliPlan = JSON.parse(morningCliStdout.slice(morningCliStdout.indexOf("{")));
+  eq("morning brief CLI reports readOnly true", morningCliPlan.readOnly, true);
+  eq("morning brief CLI reports trade execution disabled", morningCliPlan.tradeExecutionAllowed, false);
 
   const cliDir = "state-test-jarvis-cli";
   try {
@@ -847,6 +936,7 @@ await group("codex mcp bridge", async () => {
   truthy("lists Jarvis analyze chart tool", names.includes("jarvis_analyze_chart"));
   truthy("lists Jarvis scan watchlist tool", names.includes("jarvis_scan_watchlist"));
   truthy("lists Jarvis trade desk tool", names.includes("jarvis_trade_desk_check"));
+  truthy("lists Jarvis morning brief tool", names.includes("jarvis_morning_brief"));
   eq("live trade tool hidden by default", names.includes("deriv_place_multiplier_trade"), false);
 
   const health = await tools.call("tv_health_check", {});
@@ -980,6 +1070,11 @@ await group("codex mcp bridge", async () => {
     env: { SYMBOL: "VOLATILITY_75", STAKE_USD: "10", STOP_LOSS_USD: "5" },
   });
   eq("Jarvis MCP trade desk fails closed without explicit request", jarvisTradeDesk.allowed, false);
+
+  const jarvisBrief = await tools.call("jarvis_morning_brief", { includeResearch: ["CRASH_500"], timeframes: "60,15" });
+  eq("Jarvis MCP morning brief is read-only", jarvisBrief.readOnly, true);
+  eq("Jarvis MCP morning brief disables execution", jarvisBrief.tradeExecutionAllowed, false);
+  eq("Jarvis MCP morning brief marks Crash research-only", jarvisBrief.symbols.find(item => item.symbol === "CRASH_500").executionEligible, false);
 
   const liveEnabledTools = createCodexTools({
     allowLiveTrading: true,

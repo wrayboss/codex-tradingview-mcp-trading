@@ -28,6 +28,7 @@ import { monitorContract }      from "./contractMonitor.js";
 import { assertRuntimeLiveSafety, loadCurrentApprovalContext } from "./liveSafetyGate.js";
 import { appendTradeEventOnce } from "./tradeJournal.js";
 import { createDecisionId, createOrderFilledEventId, createSettlementId } from "./tradeIdentity.js";
+import { formatErrorMessage, warnRuntime } from "./runtimeWarnings.js";
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -38,14 +39,25 @@ export async function reconcileUnsettled(risk, client, opts = {}) {
   console.log(`[reconcile] Checking ${unsettled.length} unsettled contract(s)...`);
   let updated = 0;
   for (const trade of unsettled) {
+    let r;
     try {
-      const r = await client.contractStatus(trade.contractId);
-      const c = r?.proposal_open_contract;
+      r = await client.contractStatus(trade.contractId);
+    } catch (err) {
+      warnRuntime("reconcile", `Contract ${trade.contractId} status unavailable: ${formatErrorMessage(err)} — will retry next cycle.`);
+      continue;
+    }
+
+    const c = r?.proposal_open_contract;
+    try {
       if (c?.is_sold) {
         if (trade.outcome && trade.pnl_usd != null) continue;
         applySettlement(trade, c);
         if (opts.settlementCsvFile) {
-          appendSettlementCsvRowOnce(trade, { filePath: opts.settlementCsvFile, settledAt: opts.nowFn?.() ?? new Date() });
+          try {
+            appendSettlementCsvRowOnce(trade, { filePath: opts.settlementCsvFile, settledAt: opts.nowFn?.() ?? new Date() });
+          } catch (err) {
+            warnRuntime("artifact", `Failed to write settlement CSV for ${trade.contractId}: ${formatErrorMessage(err)}`);
+          }
         }
         const eventId = createSettlementId(trade);
         if (eventId) {
@@ -66,12 +78,14 @@ export async function reconcileUnsettled(risk, client, opts = {}) {
               },
             }, { filePath: opts.tradeEventsFile });
           } catch (err) {
-            console.warn(`[journal] Failed to append reconcile settlement event for ${trade.contractId}: ${err.message}`);
+            warnRuntime("journal", `Failed to append reconcile settlement event for ${trade.contractId}: ${formatErrorMessage(err)}`);
           }
         }
         updated++;
       }
-    } catch { /* still open or network error — retry next cycle */ }
+    } catch (err) {
+      warnRuntime("reconcile", `Contract ${trade.contractId} reconcile failed after status lookup: ${formatErrorMessage(err)}`);
+    }
   }
   if (updated) {
     risk.save();
