@@ -72,6 +72,38 @@ export function parseStrategyTesterSummaryText(text = "") {
   return summary;
 }
 
+export function buildSavedPineStrategyAttachmentResult({
+  name,
+  before = [],
+  after = [],
+  strategyTester = null,
+} = {}) {
+  if (!name || typeof name !== "string") throw new Error("name is required.");
+  const needle = name.toLowerCase();
+  const exactStudyMatch = after.some(item => `${item.name} ${item.title} ${item.rowText}`.toLowerCase().includes(needle));
+  const countIncreased = after.length > before.length;
+  const attachmentEvidence = { exactStudyMatch, countIncreased };
+  const result = {
+    attached: exactStudyMatch,
+    name,
+    beforeCount: before.length,
+    afterCount: after.length,
+    attachmentEvidence,
+    studies: after,
+  };
+
+  if (strategyTester) {
+    result.strategyTester = strategyTester;
+    attachmentEvidence.strategyTesterSummary = Boolean(strategyTester.hasSummary);
+  }
+
+  if (!exactStudyMatch && (countIncreased || strategyTester?.hasSummary)) {
+    attachmentEvidence.mismatchReason = "visible evidence did not include the exact saved Pine strategy name";
+  }
+
+  return result;
+}
+
 function textSchema(description, properties = {}, required = []) {
   return {
     description,
@@ -475,23 +507,17 @@ function defaultTvClient() {
         await wait(500);
 
         const after = await evaluate(listVisibleStudiesFromDom);
-        const exactStudyMatch = after.some(item => `${item.name} ${item.title} ${item.rowText}`.toLowerCase().includes(name.toLowerCase()));
-        const countIncreased = after.length > before.length;
-        const result = {
-          attached: exactStudyMatch || countIncreased,
-          name,
-          beforeCount: before.length,
-          afterCount: after.length,
-          attachmentEvidence: { exactStudyMatch, countIncreased },
-          studies: after,
-        };
+        let strategyTester = null;
         if (readSummary) {
           const rawText = await evaluate(strategyTesterSummaryTextFromDom);
-          result.strategyTester = parseStrategyTesterSummaryText(rawText);
-          result.attached = result.attached || result.strategyTester.hasSummary;
-          result.attachmentEvidence.strategyTesterSummary = result.strategyTester.hasSummary;
+          strategyTester = parseStrategyTesterSummaryText(rawText);
         }
-        return result;
+        return buildSavedPineStrategyAttachmentResult({
+          name,
+          before,
+          after,
+          strategyTester,
+        });
       });
     },
     async readStrategyTesterSummary() {

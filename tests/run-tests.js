@@ -17,6 +17,7 @@ import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts, append
 import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
 import { getOperatorWatchlist, resolveActiveWatchlist, resolveOperatorSymbol } from "../src/watchlist.js";
 import {
+  buildSavedPineStrategyAttachmentResult,
   createCodexTools,
   normalizeSyntheticSymbol,
   normalizeTradingViewSyntheticSymbol,
@@ -806,6 +807,27 @@ await group("TradingView Strategy Tester parsing", () => {
   eq("strategy tester parser reads currency", summary.metrics.totalPnlCurrency, "USD");
   eq("strategy tester parser reads trades", summary.metrics.totalTrades, 3);
   eq("strategy tester parser reads profit factor", summary.metrics.profitFactor, "0.8");
+
+  const exactAttach = buildSavedPineStrategyAttachmentResult({
+    name: "Breakout Retest V1",
+    before: [{ name: "Relative Strength Index" }],
+    after: [{ name: "Breakout Retest V1", title: "Breakout Retest V1", rowText: "Breakout Retest V1 60 5 5" }],
+    strategyTester: { hasSummary: true },
+  });
+  eq("saved strategy attachment requires exact study match", exactAttach.attached, true);
+
+  const mismatchedAttach = buildSavedPineStrategyAttachmentResult({
+    name: "Breakout Retest V1",
+    before: [{ name: "Relative Strength Index" }],
+    after: [
+      { name: "V75 EMA RSI Momentum Research V1", title: "EMA Period", rowText: "V75 EMA RSI Momentum Research V1 144 14 62 38" },
+      { name: "Relative Strength Index" },
+    ],
+    strategyTester: { hasSummary: true },
+  });
+  eq("saved strategy attachment rejects summary-only mismatch", mismatchedAttach.attached, false);
+  eq("saved strategy mismatch keeps summary evidence", mismatchedAttach.attachmentEvidence.strategyTesterSummary, true);
+  truthy("saved strategy mismatch explains evidence gap", mismatchedAttach.attachmentEvidence.mismatchReason);
 });
 
 await group("Windows TradingView launcher", () => {
