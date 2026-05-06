@@ -6,11 +6,13 @@ import {
   buildBacktestOperatorChecklist,
   buildCommandCenter,
   buildJarvisRoadmap,
+  buildMorningBriefPlan,
   buildStrategyBuilderBrief,
   buildTradeDeskChecklist,
   scanWatchlist,
   writeJarvisReport,
 } from "../src/tradingJarvis.js";
+import { buildRuntimeHealthReport } from "../src/runtimeHealth.js";
 
 function argValue(name, fallback) {
   const prefix = `--${name}=`;
@@ -29,6 +31,12 @@ function readJsonArg(name, fallback = null) {
   const value = argValue(name, "");
   if (!value) return fallback;
   return JSON.parse(readFileSync(value, "utf8").replace(/^\uFEFF/, ""));
+}
+
+function listArg(name, fallback = []) {
+  const value = argValue(name, "");
+  if (!value) return fallback;
+  return value.split(",").map(item => item.trim()).filter(Boolean);
 }
 
 function print(value) {
@@ -85,6 +93,23 @@ if (command === "plan") {
     approval: readJsonArg("approval", null),
     openPositions: readJsonArg("open-positions", []),
     env: process.env,
+  });
+} else if (command === "morning-brief") {
+  const [structureTimeframe, entryTimeframe] = listArg("timeframes", ["60", "15"]);
+  result = buildMorningBriefPlan({
+    symbols: listArg("symbols", ["VOLATILITY_75", "VOLATILITY_50"]),
+    includeResearch: listArg("include-research", []),
+    structureTimeframe,
+    entryTimeframe,
+    rules: JSON.parse(readFileSync("rules.json", "utf8")),
+    runtimeHealth: buildRuntimeHealthReport(),
+    toolAvailability: {
+      tv_research_set_chart: true,
+      tv_capture_screenshot: true,
+      tv_get_pine_errors: true,
+      deriv_research_candles: true,
+      jarvis_scan_watchlist: true,
+    },
   });
 } else if (command === "write-report") {
   const report = readJsonArg("file", null);

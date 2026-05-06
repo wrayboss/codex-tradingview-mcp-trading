@@ -25,9 +25,11 @@ import {
 import {
   analyzeChartCandles,
   buildCommandCenter,
+  buildMorningBriefPlan,
   buildTradeDeskChecklist,
   scanWatchlist,
 } from "../src/tradingJarvis.js";
+import { buildRuntimeHealthReport } from "../src/runtimeHealth.js";
 import { validateDerivTradeSize } from "../src/tradeConstraints.js";
 
 export { normalizeSyntheticSymbol };
@@ -913,6 +915,35 @@ export function createCodexTools({
       openPositions: args.openPositions || [],
       env: args.env || process.env,
     }),
+  );
+
+  addTool(
+    "jarvis_morning_brief",
+    textSchema(
+      "Build a read-only Trading Jarvis morning brief plan. It does not schedule automation, require a token, or place orders.",
+      {
+        symbols: { type: "array", items: { type: "string" }, default: ["VOLATILITY_75", "VOLATILITY_50"] },
+        includeResearch: { type: "array", items: { type: "string" }, default: [] },
+        timeframes: { type: "string", default: "60,15", description: "Comma-separated structure and entry timeframes." },
+      },
+    ),
+    async (args) => {
+      const [structureTimeframe = "60", entryTimeframe = "15"] = String(args.timeframes || "60,15").split(",").map(item => item.trim()).filter(Boolean);
+      return buildMorningBriefPlan({
+        symbols: Array.isArray(args.symbols) && args.symbols.length ? args.symbols : ["VOLATILITY_75", "VOLATILITY_50"],
+        includeResearch: Array.isArray(args.includeResearch) ? args.includeResearch : [],
+        structureTimeframe,
+        entryTimeframe,
+        runtimeHealth: buildRuntimeHealthReport(),
+        toolAvailability: {
+          tv_research_set_chart: hasTool("tv_research_set_chart"),
+          tv_capture_screenshot: hasTool("tv_capture_screenshot"),
+          tv_get_pine_errors: hasTool("tv_get_pine_errors"),
+          deriv_research_candles: hasTool("deriv_research_candles"),
+          jarvis_scan_watchlist: hasTool("jarvis_scan_watchlist"),
+        },
+      });
+    },
   );
 
   if (allowLiveTrading) {

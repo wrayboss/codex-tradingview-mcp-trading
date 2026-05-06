@@ -1,6 +1,7 @@
 import { appendSettlementCsvRowOnce, applySettlement } from "./artifacts.js";
 import { appendTradeEventOnce } from "./tradeJournal.js";
 import { createDecisionId, createSettlementId } from "./tradeIdentity.js";
+import { formatErrorMessage, warnRuntime } from "./runtimeWarnings.js";
 
 const DEFAULT_POLL_MS = 30_000;
 const DEFAULT_TIMEOUT_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -46,7 +47,11 @@ export async function monitorContract(client, contractId, decision, risk, opts =
           const settlement = applySettlement(decision, c);
           risk.save();
           if (opts.settlementCsvFile) {
-            appendSettlementCsvRowOnce(decision, { filePath: opts.settlementCsvFile, settledAt: nowFn() });
+            try {
+              appendSettlementCsvRowOnce(decision, { filePath: opts.settlementCsvFile, settledAt: nowFn() });
+            } catch (err) {
+              warnRuntime("artifact", `Failed to write settlement CSV for ${decision.contractId}: ${formatErrorMessage(err)}`);
+            }
           }
           const eventId = createSettlementId(decision);
           if (eventId) {
@@ -67,14 +72,14 @@ export async function monitorContract(client, contractId, decision, risk, opts =
                 },
               }, { filePath: opts.tradeEventsFile });
             } catch (err) {
-              console.warn(`[journal] Failed to append settlement event for ${decision.contractId}: ${err.message}`);
+              warnRuntime("journal", `Failed to append settlement event for ${decision.contractId}: ${formatErrorMessage(err)}`);
             }
           }
           console.log(`[monitor] SETTLED - ${decision.outcome.toUpperCase()} | P&L ${pnlStr}`);
           return settlement;
         }
       } catch (err) {
-        console.log(`[monitor] Poll error: ${err.message} - retrying`);
+        warnRuntime("reconcile", `Contract ${contractId} monitor status unavailable: ${formatErrorMessage(err)} - retrying`);
       }
     }
   } finally {

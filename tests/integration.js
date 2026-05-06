@@ -499,6 +499,51 @@ export const integrationTests = [
   },
 
   {
+    name: "reconcileUnsettled — logs contract and artifact failures separately",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-reconcile-errors`;
+      const risk = makeRisk();
+      const contractFailure = {
+        contractId: "CNET", orderPlaced: true, outcome: null, pnl_usd: null,
+        symbol: "VOLATILITY_75", derivSymbol: "R_75", mode: "LIVE", side: "long", epoch: 1, stakeUsd: 10, multiplier: 50, price: 100,
+        timestamp: new Date().toISOString(),
+      };
+      const artifactFailure = {
+        contractId: "CART", orderPlaced: true, outcome: null, pnl_usd: null,
+        symbol: "VOLATILITY_75", derivSymbol: "R_75", mode: "LIVE", side: "long", epoch: 2, stakeUsd: 10, multiplier: 50, price: 101,
+        timestamp: new Date().toISOString(),
+      };
+      risk.history.trades.push(contractFailure, artifactFailure);
+
+      const warnings = [];
+      const originalWarn = console.warn;
+      const client = {
+        contractStatus: async (contractId) => {
+          if (contractId === "CNET") throw new Error("Deriv unavailable");
+          return { proposal_open_contract: { is_sold: true, profit: "5.00" } };
+        },
+      };
+
+      try {
+        console.warn = (message) => { warnings.push(String(message)); };
+        await reconcileUnsettled(risk, client, {
+          settlementCsvFile: `${dir}/missing/trades.csv`,
+          tradeEventsFile: `${dir}/trade-events.jsonl`,
+          nowFn: () => new Date("2026-05-04T12:00:00.000Z"),
+        });
+      } finally {
+        console.warn = originalWarn;
+        cleanTmp(dir);
+      }
+
+      truthy("contractStatus failure is logged as reconcile retry", warnings.some(message => message.includes("[reconcile] Contract CNET status unavailable: Deriv unavailable") && message.includes("will retry next cycle")));
+      truthy("artifact write failure is logged separately", warnings.some(message => message.includes("[artifact] Failed to write settlement CSV for CART")));
+      eq("settled artifact-failure trade still updates outcome", artifactFailure.outcome, "win");
+      eq("risk.save still runs after settlement even when CSV write fails", existsSync(`${TMPDIR}-risk-log.json`), true);
+    },
+  },
+
+  {
     name: "monitorContract — records string Deriv profit and settlement CSV row",
     async run(eq, truthy) {
       const dir = `${TMPDIR}-monitor`;

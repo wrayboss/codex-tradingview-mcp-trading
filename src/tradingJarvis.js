@@ -170,6 +170,84 @@ function resolveSymbols(symbols = ["VOLATILITY_75", "VOLATILITY_50"]) {
   });
 }
 
+function uniqueSymbols(symbols = []) {
+  const seen = new Set();
+  const result = [];
+  for (const symbol of symbols) {
+    const normalized = String(symbol || "").trim();
+    if (!normalized || seen.has(normalized.toUpperCase())) continue;
+    seen.add(normalized.toUpperCase());
+    result.push(normalized);
+  }
+  return result;
+}
+
+export function buildMorningBriefPlan({
+  symbols = ["VOLATILITY_75", "VOLATILITY_50"],
+  includeResearch = [],
+  structureTimeframe = "60",
+  entryTimeframe = "15",
+  rules = {},
+  runtimeHealth = null,
+  toolAvailability = {},
+} = {}) {
+  const executionSymbols = uniqueSymbols(symbols.length ? symbols : ["VOLATILITY_75", "VOLATILITY_50"]);
+  const researchSymbols = uniqueSymbols(includeResearch);
+  const resolvedSymbols = [...executionSymbols, ...researchSymbols]
+    .map(symbol => {
+      const resolved = resolveResearchSymbol(symbol);
+      const researchOnly = !resolved.executionSupported || researchSymbols.some(item => item.toUpperCase() === symbol.toUpperCase());
+      return {
+        symbol: resolved.symbol,
+        derivSymbol: resolved.derivSymbol,
+        tradingViewSymbol: resolved.tradingViewSymbol,
+        displayName: resolved.displayName,
+        executionEligible: researchOnly ? false : resolved.executionSupported,
+        researchOnly,
+      };
+    });
+
+  return {
+    mode: "jarvis_morning_brief",
+    readOnly: true,
+    tradeExecutionAllowed: false,
+    schedulingEnabled: false,
+    liveTradingEnabled: false,
+    tokenRequired: false,
+    structureTimeframe: String(structureTimeframe || rules.timeframes?.structure || "60"),
+    entryTimeframe: String(entryTimeframe || rules.timeframes?.entry || "15"),
+    symbols: resolvedSymbols,
+    runtimeHealth,
+    toolAvailability: {
+      tv_set_chart: Boolean(toolAvailability.tv_set_chart),
+      tv_capture_screenshot: Boolean(toolAvailability.tv_capture_screenshot),
+      tv_get_pine_errors: Boolean(toolAvailability.tv_get_pine_errors),
+      deriv_research_candles: Boolean(toolAvailability.deriv_research_candles),
+      jarvis_scan_watchlist: Boolean(toolAvailability.jarvis_scan_watchlist),
+      ...toolAvailability,
+    },
+    recommendedTradingViewTasks: [
+      { id: "set_chart", tool: "tv_research_set_chart", readOnly: true, description: "Set each symbol chart to the structure and entry timeframes." },
+      { id: "capture_screenshot", tool: "tv_capture_screenshot", readOnly: true, description: "Capture chart evidence for operator review only." },
+      { id: "inspect_pine_errors", tool: "tv_get_pine_errors", readOnly: true, description: "Inspect visible Pine errors before any backtest/export claims." },
+      { id: "analyze_candles", tool: "jarvis_analyze_chart", readOnly: true, description: "Summarize candles into bias, setup quality, invalidation, and blockers." },
+      { id: "scan_watchlist", tool: "jarvis_scan_watchlist", readOnly: true, description: "Rank watchlist candidates without changing execution eligibility." },
+    ],
+    analysisPrompt: [
+      "Summarize structure, bias, setup quality, invalidation, risk notes, and blockers.",
+      "Use V75/V50 execution boundaries and mark research-only symbols clearly.",
+      "Provide no trade execution, no Deriv proposal, no Deriv buy, and no scheduling instruction.",
+    ].join(" "),
+    safety: {
+      placesOrders: false,
+      callsDerivBuyOrProposal: false,
+      schedulesAutomation: false,
+      writesRuntimeState: false,
+      changesStrategy: false,
+    },
+  };
+}
+
 export function buildStrategyBuilderBrief({ objective = "improve strategy evidence", symbols = ["VOLATILITY_75", "VOLATILITY_50"] } = {}) {
   return {
     mode: "research_only",
