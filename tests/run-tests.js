@@ -808,6 +808,10 @@ await group("TradingView Strategy Tester parsing", () => {
   eq("strategy tester parser reads trades", summary.metrics.totalTrades, 3);
   eq("strategy tester parser reads profit factor", summary.metrics.profitFactor, "0.8");
 
+  const invalidSummary = parseStrategyTesterSummaryText("Strategy Report Breakout Retest V1 Total P&L 0 USD 0.00% Total trades 0 Profitable trades — Profit factor — INVALID DATA");
+  eq("strategy tester parser flags invalid data", invalidSummary.invalidData, true);
+  eq("strategy tester parser reads zero trades", invalidSummary.metrics.totalTrades, 0);
+
   const exactAttach = buildSavedPineStrategyAttachmentResult({
     name: "Breakout Retest V1",
     before: [{ name: "Relative Strength Index" }],
@@ -1047,6 +1051,30 @@ await group("codex mcp bridge", async () => {
   eq("backtest workflow check sets chart first", tvCalls[7][0], "setChart");
   eq("backtest workflow check cleans chart", tvCalls[8][0], "cleanChartStudies");
   eq("backtest workflow check attaches strategy", tvCalls[9][0], "attachSavedPineStrategy");
+
+  const invalidWorkflowTools = createCodexTools({
+    allowLiveTrading: false,
+    externalTradingViewTools: [],
+    tvClient: {
+      setChart: async (args) => ({ symbol: args.symbol, timeframe: args.timeframe }),
+      cleanChartStudies: async () => ({ cleaned: true, after: [{ name: "RSI", title: "Relative Strength Index" }] }),
+      attachSavedPineStrategy: async (args) => ({
+        attached: true,
+        name: args.name,
+        strategyTester: parseStrategyTesterSummaryText("Strategy Report Breakout Retest V1 Total P&L 0 USD 0.00% Total trades 0 Profitable trades — Profit factor — INVALID DATA"),
+      }),
+      readStrategyTesterSummary: async () => parseStrategyTesterSummaryText("Strategy Report Breakout Retest V1 Total P&L 0 USD 0.00% Total trades 0 Profitable trades — Profit factor — INVALID DATA"),
+    },
+    derivClientFactory: () => { throw new Error("Deriv client should not be used by backtest workflow check."); },
+    strategyEvaluator: async () => ({ mode: "DRY_RUN" }),
+  });
+  const invalidWorkflow = await invalidWorkflowTools.call("tv_backtest_workflow_check", {
+    symbol: "VOLATILITY_75",
+    timeframe: "15",
+    strategyName: "Breakout Retest V1",
+  });
+  eq("backtest workflow check rejects invalid Strategy Tester data", invalidWorkflow.ok, false);
+  truthy("backtest workflow check reports invalid data blocker", invalidWorkflow.blockers.some(item => /invalid data/i.test(item)));
 
   const pineErrors = await tools.call("tv_get_pine_errors", {});
   eq("pine errors report hasErrors", pineErrors.hasErrors, true);
