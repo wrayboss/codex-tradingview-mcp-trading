@@ -42,6 +42,7 @@ export function parseStrategyTesterSummaryText(text = "") {
   const normalized = String(text || "").replace(/\s+/g, " ").trim();
   const summary = {
     hasSummary: /Total P&L/i.test(normalized) || /Total trades/i.test(normalized),
+    invalidData: /INVALID DATA/i.test(normalized),
     metrics: {},
     rawText: normalized.slice(0, 4000),
   };
@@ -1011,6 +1012,8 @@ export function createCodexTools({
       const blockers = [];
       if (!strategy.attached) blockers.push("Saved Pine strategy did not attach to the chart.");
       if (!summary.hasSummary) blockers.push("Strategy Tester summary metrics were not visible/readable.");
+      if (summary.invalidData) blockers.push("Strategy Tester reported INVALID DATA.");
+      if (summary.metrics?.totalTrades === 0) blockers.push("Strategy Tester reported zero total trades.");
       return {
         ok: blockers.length === 0,
         blockers,
