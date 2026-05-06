@@ -381,7 +381,11 @@ function defaultTvClient() {
       return withChartPage(async ({ evaluate, click, pressControlA, insertText, pressEscape, wait }) => {
         const before = await evaluate(listIndicatorsFromDom);
         const openButton = await evaluate(`(() => {
-          const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')];
+          const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')]
+            .filter(b => {
+              const r = b.getBoundingClientRect();
+              return r.width > 0 && r.height > 0;
+            });
           const btn = buttons.find(b => b.getAttribute('data-name') === 'open-indicators-dialog' || /Indicators, metrics/i.test(b.getAttribute('aria-label') || ''));
           if (!btn) return null;
           const r = btn.getBoundingClientRect();
@@ -427,7 +431,11 @@ function defaultTvClient() {
       return withChartPage(async ({ evaluate, click, pressControlA, insertText, pressEscape, wait }) => {
         const before = await evaluate(listVisibleStudiesFromDom);
         const openButton = await evaluate(`(() => {
-          const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')];
+          const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')]
+            .filter(b => {
+              const r = b.getBoundingClientRect();
+              return r.width > 0 && r.height > 0;
+            });
           const btn = buttons.find(b => b.getAttribute('data-name') === 'open-indicators-dialog' || /Indicators, metrics/i.test(b.getAttribute('aria-label') || ''));
           if (!btn) return null;
           const r = btn.getBoundingClientRect();
@@ -490,6 +498,102 @@ function defaultTvClient() {
       return withChartPage(async ({ evaluate }) => {
         const rawText = await evaluate(strategyTesterSummaryTextFromDom);
         return parseStrategyTesterSummaryText(rawText);
+      });
+    },
+    async cleanChartStudies({ keepNames = ["Relative Strength Index", "RSI"], ensureRsi = true } = {}) {
+      const keep = new Set((Array.isArray(keepNames) ? keepNames : [keepNames])
+        .filter(Boolean)
+        .flatMap(item => [String(item).toLowerCase(), String(item).replace(/^Relative Strength Index$/i, "RSI").toLowerCase()]));
+
+      return withChartPage(async ({ evaluate, click, pressControlA, insertText, pressEscape, wait }) => {
+        await pressEscape();
+        await wait(250);
+        const before = await evaluate(listIndicatorsFromDom);
+        const removed = [];
+        const shouldKeep = row => {
+          const haystack = `${row.name || ""} ${row.title || ""} ${row.rowText || ""}`.toLowerCase();
+          return [...keep].some(item => item && haystack.includes(item));
+        };
+
+        for (let attempt = 0; attempt < 12; attempt++) {
+          const rows = await evaluate(`(() => [...document.querySelectorAll('.item-l31H9iuA.study-l31H9iuA')]
+            .map(row => {
+              const rr = row.getBoundingClientRect();
+              const title = row.querySelector('[title]')?.getAttribute('title')?.trim() || '';
+              const rowText = (row.innerText || row.textContent || '').trim().replace(/\\s+/g, ' ');
+              const btn = [...row.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === 'Remove' || b.title === 'Remove');
+              const br = btn?.getBoundingClientRect();
+              return {
+                name: rowText.split(/\\s+/)[0] || title || rowText,
+                title,
+                rowText,
+                rowX: rr.x,
+                rowY: rr.y,
+                rowW: rr.width,
+                rowH: rr.height,
+                removeX: br ? br.x + br.width / 2 : null,
+                removeY: br ? br.y + br.height / 2 : null
+              };
+            })
+            .filter(row => row.rowText || row.title))()`);
+          const row = rows.find(item => !shouldKeep(item));
+          if (!row) break;
+          await click(row.rowX + 20, row.rowY + row.rowH / 2);
+          await wait(120);
+          await click(row.removeX || row.rowX + Math.max(28, row.rowW - 30), row.removeY || row.rowY + row.rowH / 2);
+          removed.push({ name: row.name, title: row.title, rowText: row.rowText });
+          await wait(650);
+        }
+
+        let after = await evaluate(listIndicatorsFromDom);
+        const hasRsi = after.some(row => /(^|\s)RSI(\s|$)|Relative Strength Index/i.test(`${row.name || ""} ${row.title || ""} ${row.rowText || ""}`));
+        let rsiAdded = false;
+        if (ensureRsi && !hasRsi) {
+          const openButton = await evaluate(`(() => {
+            const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')]
+              .filter(b => {
+                const r = b.getBoundingClientRect();
+                return r.width > 0 && r.height > 0;
+              });
+            const btn = buttons.find(b => b.getAttribute('data-name') === 'open-indicators-dialog' || /Indicators, metrics/i.test(b.getAttribute('aria-label') || ''));
+            if (!btn) return null;
+            const r = btn.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+          })()`);
+          if (!openButton) throw new Error("TradingView Indicators button not found.");
+          await click(openButton.x, openButton.y);
+          await wait(800);
+
+          const search = await evaluate(`(() => {
+            const input = [...document.querySelectorAll('input')].find(i => i.placeholder === 'Search' && i.getBoundingClientRect().width > 0);
+            if (!input) return null;
+            const r = input.getBoundingClientRect();
+            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+          })()`);
+          if (!search) throw new Error("TradingView indicator search input not found.");
+          await click(search.x, search.y);
+          await pressControlA();
+          await insertText("Relative Strength Index");
+          await wait(900);
+
+          const row = await evaluate(`(() => {
+            const rows = [...document.querySelectorAll('div,button,[role=option]')].map(el => {
+              const r = el.getBoundingClientRect();
+              const text = (el.innerText || el.textContent || '').trim().replace(/\\s+/g, ' ');
+              return { text, x: r.x, y: r.y, w: r.width, h: r.height, visible: r.width > 0 && r.height > 0 };
+            }).filter(x => x.visible && x.text === "Relative Strength Index" && x.w > 100);
+            return rows[0] || null;
+          })()`);
+          if (!row) throw new Error("Relative Strength Index result not found.");
+          await click(row.x + Math.min(row.w - 20, 220), row.y + row.h / 2);
+          await wait(1200);
+          await pressEscape();
+          await wait(300);
+          rsiAdded = true;
+          after = await evaluate(listIndicatorsFromDom);
+        }
+
+        return { cleaned: true, keepNames: [...keep], before, after, removed, rsiAdded };
       });
     },
     async removeIndicator({ name = "EMA" } = {}) {
@@ -658,6 +762,57 @@ export function createCodexTools({
     handlers.set(name, handler);
   };
   const hasTool = name => toolDefs.has(name);
+  const externalToolNames = new Set(externalTradingViewTools.map(tool => tool?.name).filter(Boolean));
+  const canManageChartStudiesExternally = externalToolNames.has("chart_get_state") && externalToolNames.has("chart_manage_indicator");
+  const cleanChartStudies = async ({ keepNames = ["Relative Strength Index", "RSI"], ensureRsi = true } = {}) => {
+    const keep = (Array.isArray(keepNames) ? keepNames : [keepNames])
+      .filter(Boolean)
+      .map(item => String(item).toLowerCase());
+    const shouldKeep = study => {
+      const haystack = `${study?.name || ""} ${study?.title || ""} ${study?.rowText || ""}`.toLowerCase();
+      return keep.some(item => item && haystack.includes(item));
+    };
+
+    if (canManageChartStudiesExternally) {
+      const beforeState = await externalTradingViewCaller("chart_get_state", {});
+      const before = Array.isArray(beforeState?.studies) ? beforeState.studies : [];
+      const removed = [];
+      for (const study of before) {
+        if (shouldKeep(study)) continue;
+        await externalTradingViewCaller("chart_manage_indicator", {
+          action: "remove",
+          indicator: study.name || study.title || "study",
+          entity_id: study.id,
+        });
+        removed.push(study);
+      }
+      let afterState = await externalTradingViewCaller("chart_get_state", {});
+      let after = Array.isArray(afterState?.studies) ? afterState.studies : [];
+      const hasRsi = after.some(study => /Relative Strength Index|(^|\s)RSI(\s|$)/i.test(`${study.name || ""} ${study.title || ""}`));
+      let rsiAdded = false;
+      if (ensureRsi && !hasRsi) {
+        await externalTradingViewCaller("chart_manage_indicator", {
+          action: "add",
+          indicator: "Relative Strength Index",
+          inputs: "{\"length\":14}",
+        });
+        rsiAdded = true;
+        afterState = await externalTradingViewCaller("chart_get_state", {});
+        after = Array.isArray(afterState?.studies) ? afterState.studies : [];
+      }
+      return {
+        cleaned: true,
+        source: "external_chart_api",
+        keepNames,
+        before,
+        after,
+        removed,
+        rsiAdded,
+      };
+    }
+
+    return tvClient.cleanChartStudies({ keepNames, ensureRsi });
+  };
 
   addTool(
     "tv_health_check",
@@ -693,6 +848,26 @@ export function createCodexTools({
       { name: { type: "string", default: "EMA" } },
     ),
     async (args) => tvClient.removeIndicator(args),
+  );
+
+  addTool(
+    "tv_clean_chart_studies",
+    textSchema(
+      "Remove chart studies except an allow-list and optionally ensure RSI is present.",
+      {
+        keepNames: {
+          type: "array",
+          items: { type: "string" },
+          default: ["Relative Strength Index", "RSI"],
+          description: "Study names or aliases to keep. Defaults to RSI only.",
+        },
+        ensureRsi: { type: "boolean", default: true },
+      },
+    ),
+    async (args) => cleanChartStudies({
+      keepNames: args.keepNames || ["Relative Strength Index", "RSI"],
+      ensureRsi: args.ensureRsi !== false,
+    }),
   );
 
   addTool(
@@ -774,6 +949,51 @@ export function createCodexTools({
     "tv_read_strategy_tester_summary",
     textSchema("Read visible TradingView Strategy Tester summary metrics from the current chart."),
     async () => tvClient.readStrategyTesterSummary(),
+  );
+
+  addTool(
+    "tv_backtest_workflow_check",
+    textSchema(
+      "Prepare a TradingView chart for backtesting, attach a saved Pine strategy, and verify visible Strategy Tester summary metrics.",
+      {
+        symbol: { type: "string", enum: ["VOLATILITY_75", "VOLATILITY_50", "R_75", "R_50"], default: "VOLATILITY_75" },
+        timeframe: { type: "string", default: "15" },
+        strategyName: { type: "string", default: "Breakout Retest V1" },
+        keepNames: {
+          type: "array",
+          items: { type: "string" },
+          default: ["Relative Strength Index", "RSI"],
+        },
+      },
+    ),
+    async (args) => {
+      const chart = await handlers.get("tv_set_chart")({
+        symbol: args.symbol || "VOLATILITY_75",
+        timeframe: String(args.timeframe || "15"),
+      });
+      const cleanup = await cleanChartStudies({
+        keepNames: args.keepNames || ["Relative Strength Index", "RSI"],
+        ensureRsi: true,
+      });
+      const strategy = await tvClient.attachSavedPineStrategy({
+        name: args.strategyName || "Breakout Retest V1",
+        readSummary: true,
+      });
+      const summary = strategy.strategyTester?.hasSummary
+        ? strategy.strategyTester
+        : await tvClient.readStrategyTesterSummary();
+      const blockers = [];
+      if (!strategy.attached) blockers.push("Saved Pine strategy did not attach to the chart.");
+      if (!summary.hasSummary) blockers.push("Strategy Tester summary metrics were not visible/readable.");
+      return {
+        ok: blockers.length === 0,
+        blockers,
+        chart,
+        cleanup,
+        strategy,
+        summary,
+      };
+    },
   );
 
   addTool(

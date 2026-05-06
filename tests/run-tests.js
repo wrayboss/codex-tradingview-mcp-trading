@@ -911,6 +911,7 @@ await group("codex mcp bridge", async () => {
       listIndicators: async () => ([{ name: "EMA", title: "Moving Average Exponential", rowText: "EMA 9 close" }]),
       addIndicator: async (args) => { tvCalls.push(["add", args]); return { added: true, name: args.name }; },
       removeIndicator: async (args) => { tvCalls.push(["remove", args]); return { removed: 1, name: args.name }; },
+      cleanChartStudies: async (args) => { tvCalls.push(["cleanChartStudies", args]); return { cleaned: true, after: [{ name: "RSI", title: "Relative Strength Index" }] }; },
       setChart: async (args) => { tvCalls.push(["setChart", args]); return { symbol: args.symbol, timeframe: args.timeframe }; },
       injectPineSource: async (args) => { tvCalls.push(["injectPineSource", args]); return { injected: true, sourceLength: args.source.length }; },
       attachSavedPineStrategy: async (args) => { tvCalls.push(["attachSavedPineStrategy", args]); return { attached: true, name: args.name, strategyTester: { hasSummary: true } }; },
@@ -938,11 +939,13 @@ await group("codex mcp bridge", async () => {
   truthy("lists tv list indicators tool", names.includes("tv_list_indicators"));
   truthy("lists tv add indicator tool", names.includes("tv_add_indicator"));
   truthy("lists tv remove indicator tool", names.includes("tv_remove_indicator"));
+  truthy("lists chart cleanup tool", names.includes("tv_clean_chart_studies"));
   truthy("lists tv set chart tool", names.includes("tv_set_chart"));
   truthy("lists tv research set chart tool", names.includes("tv_research_set_chart"));
   truthy("lists pine source injection tool", names.includes("tv_inject_pine_source"));
   truthy("lists saved Pine strategy attach tool", names.includes("tv_attach_saved_pine_strategy"));
   truthy("lists strategy tester summary tool", names.includes("tv_read_strategy_tester_summary"));
+  truthy("lists backtest workflow check tool", names.includes("tv_backtest_workflow_check"));
   truthy("lists pine errors tool", names.includes("tv_get_pine_errors"));
   truthy("lists screenshot tool", names.includes("tv_capture_screenshot"));
   truthy("lists external chart state proxy", names.includes("chart_get_state"));
@@ -977,9 +980,13 @@ await group("codex mcp bridge", async () => {
   eq("remove indicator delegates to tv client", removed.removed, 1);
   eq("remove indicator passes name", tvCalls[1][1].name, "EMA");
 
+  const cleaned = await tools.call("tv_clean_chart_studies", { keepNames: ["RSI"], ensureRsi: true });
+  eq("clean chart delegates keep names", tvCalls[2][1].keepNames[0], "RSI");
+  eq("clean chart returns cleaned", cleaned.cleaned, true);
+
   const chart = await tools.call("tv_set_chart", { symbol: "VOLATILITY_75", timeframe: "15" });
   eq("set chart delegates normalized symbol", chart.symbol, "R_75");
-  eq("set chart passes timeframe", tvCalls[2][1].timeframe, "15");
+  eq("set chart passes timeframe", tvCalls[3][1].timeframe, "15");
 
   let rejectedExecutionChart = false;
   try { await tools.call("tv_set_chart", { symbol: "CRASH_500", timeframe: "15" }); }
@@ -988,25 +995,31 @@ await group("codex mcp bridge", async () => {
 
   const crashChart = await tools.call("tv_research_set_chart", { symbol: "CRASH_500", timeframe: "15" });
   eq("research chart accepts Crash symbol", crashChart.symbol, "CRASH500");
-  eq("set chart passes research TradingView symbol", tvCalls[3][1].tradingViewSymbol, "DERIV:CRASH_500_INDEX");
+  eq("set chart passes research TradingView symbol", tvCalls[4][1].tradingViewSymbol, "DERIV:CRASH_500_INDEX");
 
   const injected = await tools.call("tv_inject_pine_source", { source: "//@version=5\nindicator('Test')" });
   eq("pine injection delegates source", injected.injected, true);
-  eq("pine injection passes source", tvCalls[4][1].source, "//@version=5\nindicator('Test')");
+  eq("pine injection passes source", tvCalls[5][1].source, "//@version=5\nindicator('Test')");
 
   const attachedStrategy = await tools.call("tv_attach_saved_pine_strategy", { name: "Breakout Retest V1" });
-  eq("saved pine strategy attach delegates name", tvCalls[5][1].name, "Breakout Retest V1");
+  eq("saved pine strategy attach delegates name", tvCalls[6][1].name, "Breakout Retest V1");
   eq("saved pine strategy attach returns attached", attachedStrategy.attached, true);
 
   const strategySummary = await tools.call("tv_read_strategy_tester_summary", {});
   eq("strategy tester summary reads trades", strategySummary.metrics.totalTrades, 3);
+
+  const workflow = await tools.call("tv_backtest_workflow_check", { symbol: "VOLATILITY_75", timeframe: "15", strategyName: "Breakout Retest V1" });
+  eq("backtest workflow check reports ok", workflow.ok, true);
+  eq("backtest workflow check sets chart first", tvCalls[7][0], "setChart");
+  eq("backtest workflow check cleans chart", tvCalls[8][0], "cleanChartStudies");
+  eq("backtest workflow check attaches strategy", tvCalls[9][0], "attachSavedPineStrategy");
 
   const pineErrors = await tools.call("tv_get_pine_errors", {});
   eq("pine errors report hasErrors", pineErrors.hasErrors, true);
   eq("pine errors include message", pineErrors.errors[0], "line 10: Syntax error");
 
   const screenshot = await tools.call("tv_capture_screenshot", { path: "state/chart.png" });
-  eq("screenshot delegates path", tvCalls[6][1].path, "state/chart.png");
+  eq("screenshot delegates path", tvCalls[10][1].path, "state/chart.png");
   eq("screenshot returns bytes", screenshot.bytes, 12);
 
   const proxied = await tools.call("chart_get_state", { compact: true });
@@ -1128,6 +1141,51 @@ await group("codex mcp bridge", async () => {
   try { await liveEnabledTools.call("deriv_place_multiplier_trade", { symbol: "VOLATILITY_75", side: "long", stakeUsd: 1, multiplier: 10, stopLossUsd: 1 }); }
   catch { liveBlocked = true; }
   truthy("live trade tool remains blocked even when listed", liveBlocked);
+});
+
+await group("codex mcp external chart cleanup", async () => {
+  let studies = [
+    { id: "strategy-1", name: "Breakout Retest V1" },
+    { id: "rsi-1", name: "Relative Strength Index" },
+  ];
+  const externalCalls = [];
+  const tools = createCodexTools({
+    externalTradingViewTools: [
+      { name: "chart_get_state", description: "external chart state", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+      { name: "chart_manage_indicator", description: "external indicator manager", inputSchema: { type: "object", properties: {}, additionalProperties: true } },
+    ],
+    externalTradingViewCaller: async (name, args) => {
+      externalCalls.push([name, args]);
+      if (name === "chart_get_state") return { studies };
+      if (name === "chart_manage_indicator" && args.action === "remove") {
+        studies = studies.filter(study => study.id !== args.entity_id);
+        return { success: true };
+      }
+      if (name === "chart_manage_indicator" && args.action === "add") {
+        studies = [...studies, { id: "rsi-added", name: args.indicator }];
+        return { success: true };
+      }
+      return {};
+    },
+    tvClient: {
+      health: async () => ({}),
+      state: async () => ({}),
+      listIndicators: async () => ([]),
+      addIndicator: async () => ({}),
+      removeIndicator: async () => ({}),
+      setChart: async () => ({}),
+      injectPineSource: async () => ({}),
+      attachSavedPineStrategy: async () => ({}),
+      readStrategyTesterSummary: async () => ({}),
+      getPineErrors: async () => ({}),
+      captureScreenshot: async () => ({}),
+    },
+  });
+
+  const cleaned = await tools.call("tv_clean_chart_studies", { keepNames: ["Relative Strength Index"], ensureRsi: true });
+  eq("external cleanup removes non-kept study", cleaned.removed[0].name, "Breakout Retest V1");
+  eq("external cleanup keeps RSI", cleaned.after.length, 1);
+  eq("external cleanup uses chart_manage_indicator", externalCalls.some(call => call[0] === "chart_manage_indicator" && call[1].action === "remove"), true);
 });
 
 // Log rotation
