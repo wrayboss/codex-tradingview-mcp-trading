@@ -16,7 +16,12 @@ import { RiskManager } from "../src/riskManager.js";
 import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts, appendSettlementCsvRowOnce, hasSettlementCsvRow } from "../src/artifacts.js";
 import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
 import { getOperatorWatchlist, resolveActiveWatchlist, resolveOperatorSymbol } from "../src/watchlist.js";
-import { createCodexTools, normalizeSyntheticSymbol, normalizeTradingViewSyntheticSymbol } from "../codex-mcp/tools.js";
+import {
+  createCodexTools,
+  normalizeSyntheticSymbol,
+  normalizeTradingViewSyntheticSymbol,
+  parseStrategyTesterSummaryText,
+} from "../codex-mcp/tools.js";
 import { buildRuntimeHealthReport } from "../src/runtimeHealth.js";
 import { formatErrorMessage } from "../src/runtimeWarnings.js";
 import {
@@ -782,6 +787,15 @@ await group("Pine strategy source", () => {
   eq("Pine strategy avoids inert alertcondition calls", /\balertcondition\s*\(/.test(source), false);
 });
 
+await group("TradingView Strategy Tester parsing", () => {
+  const summary = parseStrategyTesterSummaryText("Total P&L -12.5 USD -1.25% Max equity drawdown 4 USD 0.40% Total trades 3 Profitable trades 33.33% Profit factor 0.8");
+  truthy("strategy tester parser detects summary", summary.hasSummary);
+  eq("strategy tester parser reads pnl", summary.metrics.totalPnl, -12.5);
+  eq("strategy tester parser reads currency", summary.metrics.totalPnlCurrency, "USD");
+  eq("strategy tester parser reads trades", summary.metrics.totalTrades, 3);
+  eq("strategy tester parser reads profit factor", summary.metrics.profitFactor, "0.8");
+});
+
 await group("Windows TradingView launcher", () => {
   const launcher = readFileSync("launch.ps1", "utf8");
   eq("launcher is not tied to TradingView 3.1.0.7818", launcher.includes("TradingView.Desktop_3.1.0.7818"), false);
@@ -899,6 +913,8 @@ await group("codex mcp bridge", async () => {
       removeIndicator: async (args) => { tvCalls.push(["remove", args]); return { removed: 1, name: args.name }; },
       setChart: async (args) => { tvCalls.push(["setChart", args]); return { symbol: args.symbol, timeframe: args.timeframe }; },
       injectPineSource: async (args) => { tvCalls.push(["injectPineSource", args]); return { injected: true, sourceLength: args.source.length }; },
+      attachSavedPineStrategy: async (args) => { tvCalls.push(["attachSavedPineStrategy", args]); return { attached: true, name: args.name, strategyTester: { hasSummary: true } }; },
+      readStrategyTesterSummary: async () => ({ hasSummary: true, metrics: { totalTrades: 3 } }),
       getPineErrors: async () => ({ hasErrors: true, errors: ["line 10: Syntax error"] }),
       captureScreenshot: async (args) => { tvCalls.push(["captureScreenshot", args]); return { path: "state/chart.png", bytes: 12 }; },
     },
@@ -925,6 +941,8 @@ await group("codex mcp bridge", async () => {
   truthy("lists tv set chart tool", names.includes("tv_set_chart"));
   truthy("lists tv research set chart tool", names.includes("tv_research_set_chart"));
   truthy("lists pine source injection tool", names.includes("tv_inject_pine_source"));
+  truthy("lists saved Pine strategy attach tool", names.includes("tv_attach_saved_pine_strategy"));
+  truthy("lists strategy tester summary tool", names.includes("tv_read_strategy_tester_summary"));
   truthy("lists pine errors tool", names.includes("tv_get_pine_errors"));
   truthy("lists screenshot tool", names.includes("tv_capture_screenshot"));
   truthy("lists external chart state proxy", names.includes("chart_get_state"));
@@ -976,12 +994,19 @@ await group("codex mcp bridge", async () => {
   eq("pine injection delegates source", injected.injected, true);
   eq("pine injection passes source", tvCalls[4][1].source, "//@version=5\nindicator('Test')");
 
+  const attachedStrategy = await tools.call("tv_attach_saved_pine_strategy", { name: "Breakout Retest V1" });
+  eq("saved pine strategy attach delegates name", tvCalls[5][1].name, "Breakout Retest V1");
+  eq("saved pine strategy attach returns attached", attachedStrategy.attached, true);
+
+  const strategySummary = await tools.call("tv_read_strategy_tester_summary", {});
+  eq("strategy tester summary reads trades", strategySummary.metrics.totalTrades, 3);
+
   const pineErrors = await tools.call("tv_get_pine_errors", {});
   eq("pine errors report hasErrors", pineErrors.hasErrors, true);
   eq("pine errors include message", pineErrors.errors[0], "line 10: Syntax error");
 
   const screenshot = await tools.call("tv_capture_screenshot", { path: "state/chart.png" });
-  eq("screenshot delegates path", tvCalls[5][1].path, "state/chart.png");
+  eq("screenshot delegates path", tvCalls[6][1].path, "state/chart.png");
   eq("screenshot returns bytes", screenshot.bytes, 12);
 
   const proxied = await tools.call("chart_get_state", { compact: true });

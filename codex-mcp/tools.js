@@ -38,6 +38,40 @@ export function normalizeTradingViewSyntheticSymbol(symbol) {
   return toTradingViewSymbol(symbol);
 }
 
+export function parseStrategyTesterSummaryText(text = "") {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  const summary = {
+    hasSummary: /Total P&L/i.test(normalized) || /Total trades/i.test(normalized),
+    metrics: {},
+    rawText: normalized.slice(0, 4000),
+  };
+
+  const totalPnl = normalized.match(/Total P&L\s+(-?[\d,]+(?:\.\d+)?)\s+([A-Z]{3})\s+(-?[\d,.]+%)/i);
+  if (totalPnl) {
+    summary.metrics.totalPnl = Number(totalPnl[1].replace(/,/g, ""));
+    summary.metrics.totalPnlCurrency = totalPnl[2].toUpperCase();
+    summary.metrics.totalPnlPercent = totalPnl[3];
+  }
+
+  const maxDrawdown = normalized.match(/Max equity drawdown\s+(-?[\d,]+(?:\.\d+)?)\s+([A-Z]{3})\s+(-?[\d,.]+%)/i);
+  if (maxDrawdown) {
+    summary.metrics.maxEquityDrawdown = Number(maxDrawdown[1].replace(/,/g, ""));
+    summary.metrics.maxEquityDrawdownCurrency = maxDrawdown[2].toUpperCase();
+    summary.metrics.maxEquityDrawdownPercent = maxDrawdown[3];
+  }
+
+  const totalTrades = normalized.match(/Total trades\s+(\d+)/i);
+  if (totalTrades) summary.metrics.totalTrades = Number(totalTrades[1]);
+
+  const profitableTrades = normalized.match(/Profitable trades\s+([^\s]+)/i);
+  if (profitableTrades) summary.metrics.profitableTrades = profitableTrades[1];
+
+  const profitFactor = normalized.match(/Profit factor\s+([^\s]+)/i);
+  if (profitFactor) summary.metrics.profitFactor = profitFactor[1];
+
+  return summary;
+}
+
 function textSchema(description, properties = {}, required = []) {
   return {
     description,
@@ -281,6 +315,44 @@ function defaultTvClient() {
     })
     .filter(x => x.rowText || x.title))()`;
 
+  const listVisibleStudiesFromDom = `(() => {
+    const rows = [...document.querySelectorAll('.item-l31H9iuA.study-l31H9iuA')]
+      .map(row => {
+        const rect = row.getBoundingClientRect();
+        const title = row.querySelector('[title]')?.getAttribute('title')?.trim() || '';
+        const rowText = (row.innerText || row.textContent || '').trim().replace(/\\s+/g, ' ');
+        return { name: title || rowText, title, rowText, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      });
+    const legendButtons = [...document.querySelectorAll('button,[role="button"]')]
+      .map(el => {
+        const rect = el.getBoundingClientRect();
+        const text = (el.innerText || el.textContent || '').trim().replace(/\\s+/g, ' ');
+        return { name: text, title: el.getAttribute('title') || '', rowText: text, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      })
+      .filter(row => row.rowText && row.width > 40 && row.height > 10 && row.x < 700 && row.y > 40 && row.y < 220);
+    const seen = new Set();
+    return [...rows, ...legendButtons]
+      .filter(row => row.rowText || row.title)
+      .filter(row => {
+        const key = row.name + "|" + row.rowText + "|" + Math.round(row.x) + "|" + Math.round(row.y);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  })()`;
+
+  const strategyTesterSummaryTextFromDom = `(() => {
+    const visibleText = [...document.querySelectorAll('div,section,[role="tabpanel"],[data-name]')]
+      .map(el => {
+        const rect = el.getBoundingClientRect();
+        const text = (el.innerText || el.textContent || '').trim().replace(/\\s+/g, ' ');
+        return { text, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      })
+      .filter(item => item.text && item.width > 20 && item.height > 10)
+      .filter(item => /Total P&L|Total trades|Profit factor|Max equity drawdown/i.test(item.text));
+    return [...new Set(visibleText.map(item => item.text))].join("\\n").slice(0, 8000);
+  })()`;
+
   return {
     async health() {
       const res = await fetch(`${baseUrl}/json/version`);
@@ -348,6 +420,76 @@ function defaultTvClient() {
 
         const after = await evaluate(listIndicatorsFromDom);
         return { added: true, name, beforeCount: before.length, afterCount: after.length, indicators: after };
+      });
+    },
+    async attachSavedPineStrategy({ name, readSummary = true } = {}) {
+      if (!name || typeof name !== "string") throw new Error("name is required.");
+      return withChartPage(async ({ evaluate, click, pressControlA, insertText, pressEscape, wait }) => {
+        const before = await evaluate(listVisibleStudiesFromDom);
+        const openButton = await evaluate(`(() => {
+          const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')];
+          const btn = buttons.find(b => b.getAttribute('data-name') === 'open-indicators-dialog' || /Indicators, metrics/i.test(b.getAttribute('aria-label') || ''));
+          if (!btn) return null;
+          const r = btn.getBoundingClientRect();
+          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        })()`);
+        if (!openButton) throw new Error("TradingView Indicators button not found.");
+        await click(openButton.x, openButton.y);
+        await wait(800);
+
+        const search = await evaluate(`(() => {
+          const input = [...document.querySelectorAll('input')].find(i => i.placeholder === 'Search' && i.getBoundingClientRect().width > 0);
+          if (!input) return null;
+          const r = input.getBoundingClientRect();
+          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+        })()`);
+        if (!search) throw new Error("TradingView indicator search input not found.");
+        await click(search.x, search.y);
+        await pressControlA();
+        await insertText(name);
+        await wait(900);
+
+        const row = await evaluate(`(() => {
+          const target = ${JSON.stringify(name.toLowerCase())};
+          const candidates = [...document.querySelectorAll('[data-name="indicators-dialog"] span, [data-name="indicators-dialog"] div, [role="dialog"] span, [role="dialog"] div')]
+            .map(el => {
+              const r = el.getBoundingClientRect();
+              const text = (el.innerText || el.textContent || '').trim().replace(/\\s+/g, ' ');
+              return { text, x: r.x, y: r.y, w: r.width, h: r.height, visible: r.width > 0 && r.height > 0 };
+            })
+            .filter(item => item.visible && item.text.toLowerCase() === target && item.w > 40);
+          return candidates[0] || null;
+        })()`);
+        if (!row) throw new Error(`Saved Pine strategy result not found: ${name}`);
+        await click(row.x + Math.min(row.w - 8, 160), row.y + row.h / 2);
+        await wait(1500);
+        await pressEscape();
+        await wait(500);
+
+        const after = await evaluate(listVisibleStudiesFromDom);
+        const exactStudyMatch = after.some(item => `${item.name} ${item.title} ${item.rowText}`.toLowerCase().includes(name.toLowerCase()));
+        const countIncreased = after.length > before.length;
+        const result = {
+          attached: exactStudyMatch || countIncreased,
+          name,
+          beforeCount: before.length,
+          afterCount: after.length,
+          attachmentEvidence: { exactStudyMatch, countIncreased },
+          studies: after,
+        };
+        if (readSummary) {
+          const rawText = await evaluate(strategyTesterSummaryTextFromDom);
+          result.strategyTester = parseStrategyTesterSummaryText(rawText);
+          result.attached = result.attached || result.strategyTester.hasSummary;
+          result.attachmentEvidence.strategyTesterSummary = result.strategyTester.hasSummary;
+        }
+        return result;
+      });
+    },
+    async readStrategyTesterSummary() {
+      return withChartPage(async ({ evaluate }) => {
+        const rawText = await evaluate(strategyTesterSummaryTextFromDom);
+        return parseStrategyTesterSummaryText(rawText);
       });
     },
     async removeIndicator({ name = "EMA" } = {}) {
@@ -610,6 +752,28 @@ export function createCodexTools({
       ["source"],
     ),
     async (args) => tvClient.injectPineSource({ source: args.source, compile: args.compile !== false }),
+  );
+
+  addTool(
+    "tv_attach_saved_pine_strategy",
+    textSchema(
+      "Search TradingView's Indicators dialog for a saved Pine strategy, add it to the chart, and optionally read visible Strategy Tester summary metrics.",
+      {
+        name: { type: "string", description: "Exact saved Pine script name, for example Breakout Retest V1." },
+        readSummary: { type: "boolean", default: true },
+      },
+      ["name"],
+    ),
+    async (args) => tvClient.attachSavedPineStrategy({
+      name: args.name,
+      readSummary: args.readSummary !== false,
+    }),
+  );
+
+  addTool(
+    "tv_read_strategy_tester_summary",
+    textSchema("Read visible TradingView Strategy Tester summary metrics from the current chart."),
+    async () => tvClient.readStrategyTesterSummary(),
   );
 
   addTool(
