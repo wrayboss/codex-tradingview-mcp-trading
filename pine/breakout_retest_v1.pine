@@ -162,7 +162,3 @@ plot(lastResistance, "R", color=color.new(color.red,   30), style=plot.style_cir
 plot(lastSupport,    "S", color=color.new(color.green, 30), style=plot.style_circles)
 plotshape(confirmLong,  "Long",  shape.triangleup,   location.belowbar, color.lime, size=size.small)
 plotshape(confirmShort, "Short", shape.triangledown, location.abovebar, color.red,  size=size.small)
-
-// ============ ALERTS ============
-alertcondition(confirmLong,  "BR_LONG",  "BR_LONG {{ticker}} {{close}}")
-alertcondition(confirmShort, "BR_SHORT", "BR_SHORT {{ticker}} {{close}}")
