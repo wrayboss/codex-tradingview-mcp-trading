@@ -601,6 +601,8 @@ await group("Codex Autonomy Lab", () => {
   truthy("candidate generator includes tuned V75 research candidate", researchCandidate);
   eq("tuned research candidate uses EMA 144", researchCandidate.params.emaPeriod, 144);
   eq("tuned research candidate stays unapproved", researchCandidate.evidence.executionApproved, false);
+  const v50Candidates = generateStrategyCandidates({ symbol: "VOLATILITY_50" });
+  eq("V75 evidence is not attached to V50 candidates", v50Candidates.some(candidate => candidate.id.endsWith("ema-rsi-momentum-research-v1")), false);
 
   const candles = Array.from({ length: 90 }, (_, i) => ({
     epoch: 1000 + i * 900,

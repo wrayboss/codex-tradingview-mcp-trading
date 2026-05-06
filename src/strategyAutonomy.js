@@ -147,7 +147,7 @@ export function generateStrategyCandidates({ symbol = "VOLATILITY_75" } = {}) {
     promotionRequired: true,
   };
 
-  return [
+  const candidates = [
     {
       ...base,
       id: `${resolved.symbol}-ema-rsi-momentum-fast`,
@@ -164,6 +164,16 @@ export function generateStrategyCandidates({ symbol = "VOLATILITY_75" } = {}) {
     },
     {
       ...base,
+      id: `${resolved.symbol}-rsi-mean-reversion`,
+      name: "RSI mean reversion",
+      family: "rsi_mean_reversion",
+      params: { emaPeriod: 34, rsiPeriod: 14, rsiLong: 35, rsiShort: 65, holdBars: 6, stopAtr: 1.0, takeProfitAtr: 1.5 },
+    },
+  ];
+
+  if (resolved.symbol === "VOLATILITY_75") {
+    candidates.splice(2, 0, {
+      ...base,
       id: `${resolved.symbol}-ema-rsi-momentum-research-v1`,
       name: "EMA/RSI momentum research V1",
       family: "ema_rsi_momentum",
@@ -174,15 +184,10 @@ export function generateStrategyCandidates({ symbol = "VOLATILITY_75" } = {}) {
         test: { trades: 77, winRate: 0.5714285714285714, profitFactor: 2.0639207799275434, netPoints: 7505.44157069494, maxDrawdownPoints: 958.7591150771841 },
         executionApproved: false,
       },
-    },
-    {
-      ...base,
-      id: `${resolved.symbol}-rsi-mean-reversion`,
-      name: "RSI mean reversion",
-      family: "rsi_mean_reversion",
-      params: { emaPeriod: 34, rsiPeriod: 14, rsiLong: 35, rsiShort: 65, holdBars: 6, stopAtr: 1.0, takeProfitAtr: 1.5 },
-    },
-  ];
+    });
+  }
+
+  return candidates;
 }
 
 function validateCandles(candles = []) {
