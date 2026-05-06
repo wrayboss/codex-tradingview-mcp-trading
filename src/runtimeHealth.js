@@ -100,7 +100,7 @@ export function buildRuntimeHealthReport({
     tradingViewCalls: false,
     safetyLog: {
       exists: safetyExists,
-      valid: Boolean(safetyLog && Array.isArray(safetyLog.trades)),
+      valid: safetyExists && Boolean(safetyLog && Array.isArray(safetyLog.trades)),
       path: safetyLogFile,
     },
     trades: summarizeTrades(trades),

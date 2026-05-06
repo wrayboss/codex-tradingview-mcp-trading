@@ -397,6 +397,7 @@ await group("runtime health", () => {
     rmSync(missingDir, { recursive: true, force: true });
     const missing = buildRuntimeHealthReport({ rootDir: missingDir });
     eq("runtime health handles missing safety log", missing.safetyLog.exists, false);
+    eq("runtime health does not mark missing safety log valid", missing.safetyLog.valid, false);
     eq("runtime health handles missing trade count", missing.trades.total, 0);
     eq("runtime health handles missing journal event count", missing.tradeJournal.events, 0);
 
