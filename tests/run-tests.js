@@ -776,6 +776,12 @@ await group("Trading Jarvis command center", () => {
   }
 });
 
+await group("Pine strategy source", () => {
+  const source = readFileSync("pine/breakout_retest_v1.pine", "utf8");
+  truthy("Pine source is a strategy", /\bstrategy\s*\(/.test(source));
+  eq("Pine strategy avoids inert alertcondition calls", /\balertcondition\s*\(/.test(source), false);
+});
+
 await group("Windows TradingView launcher", () => {
   const launcher = readFileSync("launch.ps1", "utf8");
   eq("launcher is not tied to TradingView 3.1.0.7818", launcher.includes("TradingView.Desktop_3.1.0.7818"), false);
