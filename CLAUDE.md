@@ -126,4 +126,4 @@ When reporting results, prefer:
 - `DerivClient.sendRetry()` retries on `RateLimit` and `Timeout` error codes only.
 - `buy()` uses plain `send()` — retry for orders is handled at the `placeOrderWithRetry()` level, which gets a fresh proposal each attempt.
 - CSV has two row types per trade: an entry row (placed) and a SETTLE row (outcome known).
-- Integration tests in `tests/integration.js` cover: EMA guard, backtest gate, open-position block, no-signal path, dry-run guarantee, live signal + order placement, retry exhaustion, and reconcile logic.
+- Integration tests in `tests/integration.js` cover cycle guards, backtest gates, open-position blocks, no-signal paths, dry-run guarantees, live signal/order placement, retry exhaustion, settlement monitoring, and reconciliation logic.

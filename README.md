@@ -90,6 +90,16 @@ node scripts/validate-backtest.js
 
 `node scripts/validate-backtest.js` with no CSV must exit with code `1` and print usage text. CI treats that as an intentional usage check, not as a broken workflow.
 
+For post-merge operator/runtime validation when local credentials are configured, also run:
+
+```powershell
+npm run dry-run
+```
+
+Dry-run authorizes Deriv, fetches candles, and records a decision, but it must not place an order.
+
+`npm run git:preflight` is for push and PR work. It must fail closed on local `main`; that failure is expected during read-only main validation and should not be treated as a code regression.
+
 Do not work on local `main`; use a branch or isolated worktree for changes. PRs must not weaken live safety gates without explicit review, and runtime/private artifacts such as `.env`, `trades.csv`, `safety-check-log*.json`, `state/`, tokens, screenshots, and account artifacts must stay out of version control.
 
 ### Git Remote Safety Preflight
@@ -291,7 +301,7 @@ node scripts/set-chart.js VOLATILITY_50 15
 | `src/derivClient.js` | WebSocket client with retry/backoff |
 | `pine/breakout_retest_v1.pine` | TradingView strategy for backtesting |
 | `scripts/validate-backtest.js` | Gate validator — reads TV CSV, writes backtest-approved.json |
-| `tests/integration.js` | Integration tests — 11 tests, no network calls |
+| `tests/integration.js` | Integration coverage for cycle guards, live gates, dry-run guarantees, order placement, retry exhaustion, and reconciliation |
 | `state/backtest-approved.json` | Gate results — `demoApproved` gates demo trading, `realApproved` gates real trading |
 | `state/bot.pid` | PID lock — prevents concurrent bot instances |
 | `state/trade-events.jsonl` | Append-only local audit journal for decisions, fills, and settlements |
