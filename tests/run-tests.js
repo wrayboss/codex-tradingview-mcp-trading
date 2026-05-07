@@ -1211,6 +1211,7 @@ await group("codex mcp external chart cleanup", async () => {
     { id: "rsi-1", name: "Relative Strength Index" },
   ];
   const externalCalls = [];
+  const localCalls = [];
   const tools = createCodexTools({
     externalTradingViewTools: [
       { name: "chart_get_state", description: "external chart state", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
@@ -1235,6 +1236,12 @@ await group("codex mcp external chart cleanup", async () => {
       listIndicators: async () => ([]),
       addIndicator: async () => ({}),
       removeIndicator: async () => ({}),
+      cleanChartStudies: async (args) => {
+        localCalls.push(args);
+        const before = studies;
+        studies = studies.filter(study => study.name === "Relative Strength Index");
+        return { cleaned: true, source: "local_dom", before, after: studies, removed: before.filter(study => study.name !== "Relative Strength Index"), rsiAdded: false };
+      },
       setChart: async () => ({}),
       injectPineSource: async () => ({}),
       attachSavedPineStrategy: async () => ({}),
@@ -1247,7 +1254,36 @@ await group("codex mcp external chart cleanup", async () => {
   const cleaned = await tools.call("tv_clean_chart_studies", { keepNames: ["Relative Strength Index"], ensureRsi: true });
   eq("external cleanup removes non-kept study", cleaned.removed[0].name, "Breakout Retest V1");
   eq("external cleanup keeps RSI", cleaned.after.length, 1);
-  eq("external cleanup uses chart_manage_indicator", externalCalls.some(call => call[0] === "chart_manage_indicator" && call[1].action === "remove"), true);
+  eq("chart cleanup prefers local DOM cleanup", localCalls.length, 1);
+  eq("chart cleanup avoids slow external removal when local cleanup is available", externalCalls.some(call => call[0] === "chart_manage_indicator" && call[1].action === "remove"), false);
+
+  studies = [
+    { id: "strategy-2", name: "Breakout Retest V1" },
+    { id: "rsi-2", name: "Relative Strength Index" },
+  ];
+  const fallbackCalls = [];
+  const fallbackTools = createCodexTools({
+    externalTradingViewTools: [
+      { name: "chart_get_state", description: "external chart state", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+      { name: "chart_manage_indicator", description: "external indicator manager", inputSchema: { type: "object", properties: {}, additionalProperties: true } },
+    ],
+    externalTradingViewCaller: async (name, args) => {
+      fallbackCalls.push([name, args]);
+      if (name === "chart_get_state") return { studies };
+      if (name === "chart_manage_indicator" && args.action === "remove") {
+        studies = studies.filter(study => study.id !== args.entity_id);
+        return { success: true };
+      }
+      return {};
+    },
+    tvClient: {
+      cleanChartStudies: async () => { throw new Error("local cleanup unavailable"); },
+    },
+  });
+  const fallbackCleaned = await fallbackTools.call("tv_clean_chart_studies", { keepNames: ["Relative Strength Index"], ensureRsi: true });
+  eq("chart cleanup falls back to external removal on local failure", fallbackCleaned.removed[0].id, "strategy-2");
+  eq("chart cleanup reports fallback reason", fallbackCleaned.fallbackReason, "local cleanup unavailable");
+  eq("fallback cleanup uses chart_manage_indicator", fallbackCalls.some(call => call[0] === "chart_manage_indicator" && call[1].action === "remove"), true);
 });
 
 // Log rotation

@@ -800,6 +800,17 @@ export function createCodexTools({
       return keep.some(item => item && haystack.includes(item));
     };
 
+    let localCleanupError = null;
+    if (typeof tvClient.cleanChartStudies === "function") {
+      try {
+        const result = await tvClient.cleanChartStudies({ keepNames, ensureRsi });
+        return { ...result, source: result?.source || "local_dom" };
+      } catch (error) {
+        localCleanupError = error;
+        if (!canManageChartStudiesExternally) throw error;
+      }
+    }
+
     if (canManageChartStudiesExternally) {
       const beforeState = await externalTradingViewCaller("chart_get_state", {});
       const before = Array.isArray(beforeState?.studies) ? beforeState.studies : [];
@@ -835,6 +846,7 @@ export function createCodexTools({
         after,
         removed,
         rsiAdded,
+        fallbackReason: localCleanupError ? localCleanupError.message : undefined,
       };
     }
 
