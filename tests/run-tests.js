@@ -792,12 +792,18 @@ await group("Pine strategy source", () => {
   const source = readFileSync("pine/breakout_retest_v1.pine", "utf8");
   truthy("Pine source is a strategy", /\bstrategy\s*\(/.test(source));
   eq("Pine strategy avoids inert alertcondition calls", /\balertcondition\s*\(/.test(source), false);
+  truthy("Pine strategy uses fixed sizing for TradingView synthetic backtests", /default_qty_type\s*=\s*strategy\.fixed/.test(source));
+  truthy("Pine strategy uses one synthetic unit per backtest order", /default_qty_value\s*=\s*1/.test(source));
+  truthy("Pine strategy has enough backtest capital for V75 fixed-unit orders", /initial_capital\s*=\s*100000/.test(source));
+  truthy("Pine strategy configures low margin for V75 fixed-unit backtests", /margin_long\s*=\s*1/.test(source) && /margin_short\s*=\s*1/.test(source));
 
   const researchSource = readFileSync("pine/v75_ema_rsi_momentum_research_v1.pine", "utf8");
   truthy("research Pine source is a strategy", /\bstrategy\s*\(/.test(researchSource));
   truthy("research Pine uses tuned title", researchSource.includes("V75 EMA RSI Momentum Research V1"));
   eq("research Pine avoids inert alertcondition calls", /\balertcondition\s*\(/.test(researchSource), false);
   eq("research Pine keeps EMA plot disabled by default", researchSource.includes('input.bool(false, "Plot EMA"'), true);
+  truthy("research Pine uses fixed sizing for TradingView synthetic backtests", /default_qty_type\s*=\s*strategy\.fixed/.test(researchSource));
+  truthy("research Pine has enough backtest capital for V75 fixed-unit orders", /initial_capital\s*=\s*100000/.test(researchSource));
 });
 
 await group("TradingView Strategy Tester parsing", () => {
@@ -811,6 +817,9 @@ await group("TradingView Strategy Tester parsing", () => {
   const invalidSummary = parseStrategyTesterSummaryText("Strategy Report Breakout Retest V1 Total P&L 0 USD 0.00% Total trades 0 Profitable trades — Profit factor — INVALID DATA");
   eq("strategy tester parser flags invalid data", invalidSummary.invalidData, true);
   eq("strategy tester parser reads zero trades", invalidSummary.metrics.totalTrades, 0);
+
+  const commaTradeSummary = parseStrategyTesterSummaryText("Strategy Report Codex Quantity Probe Fixed Total trades 2,101 Profitable trades 48.83% Profit factor 0.923");
+  eq("strategy tester parser reads comma-separated total trades", commaTradeSummary.metrics.totalTrades, 2101);
 
   const exactAttach = buildSavedPineStrategyAttachmentResult({
     name: "Breakout Retest V1",
