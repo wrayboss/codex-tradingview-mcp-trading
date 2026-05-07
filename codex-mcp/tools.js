@@ -61,8 +61,8 @@ export function parseStrategyTesterSummaryText(text = "") {
     summary.metrics.maxEquityDrawdownPercent = maxDrawdown[3];
   }
 
-  const totalTrades = normalized.match(/Total trades\s+(\d+)/i);
-  if (totalTrades) summary.metrics.totalTrades = Number(totalTrades[1]);
+  const totalTrades = normalized.match(/Total trades\s+([\d,]+)/i);
+  if (totalTrades) summary.metrics.totalTrades = Number(totalTrades[1].replace(/,/g, ""));
 
   const profitableTrades = normalized.match(/Profitable trades\s+([^\s]+)/i);
   if (profitableTrades) summary.metrics.profitableTrades = profitableTrades[1];
