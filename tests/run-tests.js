@@ -1052,6 +1052,34 @@ await group("codex mcp bridge", async () => {
   eq("backtest workflow check cleans chart", tvCalls[8][0], "cleanChartStudies");
   eq("backtest workflow check attaches strategy", tvCalls[9][0], "attachSavedPineStrategy");
 
+  const panelOpenCalls = [];
+  const panelOpenTools = createCodexTools({
+    allowLiveTrading: false,
+    externalTradingViewTools: [
+      { name: "ui_open_panel", description: "external panel opener", inputSchema: { type: "object", properties: {}, additionalProperties: true } },
+    ],
+    externalTradingViewCaller: async (name, args) => {
+      panelOpenCalls.push([name, args]);
+      return { success: true, panel: args.panel, action: args.action };
+    },
+    tvClient: {
+      setChart: async (args) => ({ symbol: args.symbol, timeframe: args.timeframe }),
+      cleanChartStudies: async () => ({ cleaned: true, after: [{ name: "RSI", title: "Relative Strength Index" }] }),
+      attachSavedPineStrategy: async (args) => ({ attached: true, name: args.name, strategyTester: { hasSummary: false, metrics: {} } }),
+      readStrategyTesterSummary: async () => ({ hasSummary: true, invalidData: false, metrics: { totalTrades: 2 } }),
+    },
+    derivClientFactory: () => { throw new Error("Deriv client should not be used by backtest workflow check."); },
+    strategyEvaluator: async () => ({ mode: "DRY_RUN" }),
+  });
+  const panelOpenWorkflow = await panelOpenTools.call("tv_backtest_workflow_check", {
+    symbol: "VOLATILITY_75",
+    timeframe: "15",
+    strategyName: "Breakout Retest V1",
+  });
+  eq("backtest workflow opens Strategy Tester before fallback summary read", panelOpenCalls[0][0], "ui_open_panel");
+  eq("backtest workflow opens strategy tester panel", panelOpenCalls[0][1].panel, "strategy-tester");
+  eq("backtest workflow succeeds after panel-assisted summary read", panelOpenWorkflow.ok, true);
+
   const invalidWorkflowTools = createCodexTools({
     allowLiveTrading: false,
     externalTradingViewTools: [],
@@ -1075,6 +1103,75 @@ await group("codex mcp bridge", async () => {
   });
   eq("backtest workflow check rejects invalid Strategy Tester data", invalidWorkflow.ok, false);
   truthy("backtest workflow check reports invalid data blocker", invalidWorkflow.blockers.some(item => /invalid data/i.test(item)));
+
+  const cleanupFailureTools = createCodexTools({
+    allowLiveTrading: false,
+    externalTradingViewTools: [],
+    tvClient: {
+      setChart: async (args) => ({ symbol: args.symbol, timeframe: args.timeframe }),
+      cleanChartStudies: async () => { throw new Error("TradingView chart after navigation not found."); },
+      attachSavedPineStrategy: async () => { throw new Error("attach should be skipped after cleanup failure"); },
+      readStrategyTesterSummary: async () => { throw new Error("summary should be skipped after cleanup failure"); },
+    },
+    derivClientFactory: () => { throw new Error("Deriv client should not be used by backtest workflow check."); },
+    strategyEvaluator: async () => ({ mode: "DRY_RUN" }),
+  });
+  const cleanupFailureWorkflow = await cleanupFailureTools.call("tv_backtest_workflow_check", {
+    symbol: "VOLATILITY_75",
+    timeframe: "15",
+    strategyName: "Breakout Retest V1",
+  });
+  eq("backtest workflow check fails closed on chart cleanup error", cleanupFailureWorkflow.ok, false);
+  truthy("backtest workflow check reports cleanup blocker", cleanupFailureWorkflow.blockers.some(item => /chart cleanup failed/i.test(item)));
+
+  const attachFailureTools = createCodexTools({
+    allowLiveTrading: false,
+    externalTradingViewTools: [],
+    tvClient: {
+      setChart: async (args) => ({ symbol: args.symbol, timeframe: args.timeframe }),
+      cleanChartStudies: async () => ({ cleaned: true, after: [{ name: "RSI", title: "Relative Strength Index" }] }),
+      attachSavedPineStrategy: async () => { throw new Error("TradingView indicator search input not found."); },
+      readStrategyTesterSummary: async () => { throw new Error("summary should be skipped after attach failure"); },
+    },
+    derivClientFactory: () => { throw new Error("Deriv client should not be used by backtest workflow check."); },
+    strategyEvaluator: async () => ({ mode: "DRY_RUN" }),
+  });
+  const attachFailureWorkflow = await attachFailureTools.call("tv_backtest_workflow_check", {
+    symbol: "VOLATILITY_75",
+    timeframe: "15",
+    strategyName: "Breakout Retest V1",
+  });
+  eq("backtest workflow check fails closed on attach UI error", attachFailureWorkflow.ok, false);
+  truthy("backtest workflow check reports attach UI error", attachFailureWorkflow.blockers.some(item => /search input not found/i.test(item)));
+  eq("backtest workflow check keeps structured strategy failure", attachFailureWorkflow.strategy.attached, false);
+
+  const previousBacktestStepTimeout = process.env.CODEX_TV_BACKTEST_STEP_TIMEOUT_MS;
+  process.env.CODEX_TV_BACKTEST_STEP_TIMEOUT_MS = "5";
+  try {
+    const timeoutTools = createCodexTools({
+      allowLiveTrading: false,
+      externalTradingViewTools: [],
+      tvClient: {
+        setChart: async (args) => ({ symbol: args.symbol, timeframe: args.timeframe }),
+        cleanChartStudies: async () => ({ cleaned: true, after: [{ name: "RSI", title: "Relative Strength Index" }] }),
+        attachSavedPineStrategy: async () => new Promise(() => {}),
+        readStrategyTesterSummary: async () => ({ hasSummary: true, metrics: { totalTrades: 1 } }),
+      },
+      derivClientFactory: () => { throw new Error("Deriv client should not be used by backtest workflow check."); },
+      strategyEvaluator: async () => ({ mode: "DRY_RUN" }),
+    });
+    const timeoutWorkflow = await timeoutTools.call("tv_backtest_workflow_check", {
+      symbol: "VOLATILITY_75",
+      timeframe: "15",
+      strategyName: "Breakout Retest V1",
+    });
+    eq("backtest workflow check fails closed on attach timeout", timeoutWorkflow.ok, false);
+    truthy("backtest workflow check reports attach timeout", timeoutWorkflow.blockers.some(item => /timed out/i.test(item)));
+    eq("backtest workflow check reports configured step timeout", timeoutWorkflow.stepTimeoutMs, 5);
+  } finally {
+    if (previousBacktestStepTimeout === undefined) delete process.env.CODEX_TV_BACKTEST_STEP_TIMEOUT_MS;
+    else process.env.CODEX_TV_BACKTEST_STEP_TIMEOUT_MS = previousBacktestStepTimeout;
+  }
 
   const pineErrors = await tools.call("tv_get_pine_errors", {});
   eq("pine errors report hasErrors", pineErrors.hasErrors, true);
