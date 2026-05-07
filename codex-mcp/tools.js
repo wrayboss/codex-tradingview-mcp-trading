@@ -117,6 +117,27 @@ function textSchema(description, properties = {}, required = []) {
   };
 }
 
+function positiveEnvNumber(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function errorMessage(error) {
+  return error?.message || String(error);
+}
+
+function withTimeout(promise, timeoutMs, label) {
+  let timer = null;
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 const EXTERNAL_TRADINGVIEW_MCP_PATH = process.env.CODEX_TRADINGVIEW_MCP_SERVER
   || "C:/Users/NewAdmin/tradingview-mcp/src/server.js";
 
@@ -256,6 +277,7 @@ async function defaultExternalTradingViewCaller(name, args = {}) {
 function defaultTvClient() {
   const baseUrl = process.env.TRADINGVIEW_CDP_URL || "http://127.0.0.1:9222";
   const screenshotDir = process.env.CODEX_TV_SCREENSHOT_DIR || "state";
+  const cdpCommandTimeoutMs = positiveEnvNumber("CODEX_TV_CDP_COMMAND_TIMEOUT_MS", 10000);
 
   function toTradingViewSymbol(symbol) {
     return normalizeTradingViewSyntheticSymbol(symbol);
@@ -277,19 +299,34 @@ function defaultTvClient() {
     const pending = new Map();
     const ws = new WebSocket(target.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => {
-      ws.on("open", resolve);
-      ws.on("error", reject);
+      const timer = setTimeout(() => {
+        ws.close();
+        reject(new Error(`TradingView CDP websocket open timed out after ${cdpCommandTimeoutMs}ms`));
+      }, cdpCommandTimeoutMs);
+      ws.on("open", () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      ws.on("error", error => {
+        clearTimeout(timer);
+        reject(error);
+      });
     });
     ws.on("message", raw => {
       const msg = JSON.parse(raw);
       if (!pending.has(msg.id)) return;
-      const { resolve, reject } = pending.get(msg.id);
+      const { resolve, reject, timer } = pending.get(msg.id);
       pending.delete(msg.id);
+      clearTimeout(timer);
       msg.error ? reject(new Error(JSON.stringify(msg.error))) : resolve(msg.result);
     });
     const send = (method, params = {}) => new Promise((resolve, reject) => {
       const messageId = ++id;
-      pending.set(messageId, { resolve, reject });
+      const timer = setTimeout(() => {
+        pending.delete(messageId);
+        reject(new Error(`TradingView CDP ${method} timed out after ${cdpCommandTimeoutMs}ms`));
+      }, cdpCommandTimeoutMs);
+      pending.set(messageId, { resolve, reject, timer });
       ws.send(JSON.stringify({ id: messageId, method, params }));
     });
     const evaluate = async (expression) => {
@@ -386,6 +423,104 @@ function defaultTvClient() {
     return [...new Set(visibleText.map(item => item.text))].join("\\n").slice(0, 8000);
   })()`;
 
+  const openIndicatorsButtonFromDom = `(() => {
+    const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')]
+      .filter(b => {
+        const r = b.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+    const btn = buttons.find(b => b.getAttribute('data-name') === 'open-indicators-dialog' || /Indicators, metrics/i.test(b.getAttribute('aria-label') || ''));
+    if (!btn) return null;
+    const r = btn.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  })()`;
+
+  const indicatorsDialogFromDom = `(() => {
+    const dialog = [...document.querySelectorAll('[data-name="indicators-dialog"], [role="dialog"]')]
+      .find(item => item.getAttribute('data-name') === 'indicators-dialog'
+        || /Indicators, metrics, and strategies/i.test(item.innerText || item.textContent || ''));
+    if (!dialog) return null;
+    const r = dialog.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
+  })()`;
+
+  const indicatorSearchInputFromDom = `(() => {
+    const inputs = [...document.querySelectorAll('input')]
+      .map(input => {
+        const r = input.getBoundingClientRect();
+        return {
+          placeholder: input.placeholder || '',
+          ariaLabel: input.getAttribute('aria-label') || '',
+          x: r.x + r.width / 2,
+          y: r.y + r.height / 2,
+          width: r.width,
+          height: r.height,
+          visible: r.width > 0 && r.height > 0,
+        };
+      })
+      .filter(input => input.visible);
+    return inputs.find(input => input.placeholder === 'Search')
+      || inputs.find(input => /search/i.test(input.placeholder + ' ' + input.ariaLabel))
+      || inputs.find(input => input.width > 100 && input.y < 240)
+      || null;
+  })()`;
+
+  const notifyIndicatorSearchInputFromDom = `(() => {
+    const input = [...document.querySelectorAll('[data-name="indicators-dialog"] input, [role="dialog"] input, input')]
+      .find(item => {
+        const r = item.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && (item.placeholder === 'Search' || /search/i.test(item.placeholder || item.getAttribute('aria-label') || ''));
+      });
+    if (!input) return null;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return input.value;
+  })()`;
+
+  const myScriptsTabFromDom = `(() => {
+    const dialog = document.querySelector('[data-name="indicators-dialog"], [role="dialog"]') || document;
+    const candidates = [...dialog.querySelectorAll('button,div,[role=tab],[role=button]')]
+      .map(el => {
+        const r = el.getBoundingClientRect();
+        const text = (el.innerText || el.textContent || '').trim().replace(/\\s+/g, ' ');
+        return { text, x: r.x, y: r.y, w: r.width, h: r.height, visible: r.width > 0 && r.height > 0 };
+      })
+      .filter(item => item.visible && item.text === 'My scripts' && item.w > 50);
+    return candidates.sort((a, b) => b.w - a.w)[0] || null;
+  })()`;
+
+  async function openIndicatorsDialogIfNeeded(evaluate, click, wait) {
+    const dialog = await evaluate(indicatorsDialogFromDom);
+    if (dialog) return dialog;
+    const openButton = await waitForDomResult(evaluate, wait, openIndicatorsButtonFromDom, "TradingView Indicators button", { attempts: 8 });
+    await click(openButton.x, openButton.y);
+    await wait(800);
+    return waitForDomResult(evaluate, wait, indicatorsDialogFromDom, "TradingView Indicators dialog", { attempts: 12, delayMs: 250 });
+  }
+
+  async function refreshIndicatorSearch(evaluate, wait) {
+    await evaluate(notifyIndicatorSearchInputFromDom);
+    await wait(1100);
+  }
+
+  async function waitForDomResult(evaluate, wait, expression, description, { attempts = 24, delayMs = 250 } = {}) {
+    let last = null;
+    let lastError = null;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        last = await evaluate(expression);
+        lastError = null;
+      } catch (error) {
+        last = null;
+        lastError = error;
+      }
+      if (last && (!Array.isArray(last) || last.length > 0)) return last;
+      await wait(delayMs);
+    }
+    const suffix = lastError ? ` Last error: ${errorMessage(lastError)}` : "";
+    throw new Error(`${description} not found.${suffix}`);
+  }
+
   return {
     async health() {
       const res = await fetch(`${baseUrl}/json/version`);
@@ -413,34 +548,15 @@ function defaultTvClient() {
     async addIndicator({ name = "Moving Average Exponential" } = {}) {
       return withChartPage(async ({ evaluate, click, pressControlA, insertText, pressEscape, wait }) => {
         const before = await evaluate(listIndicatorsFromDom);
-        const openButton = await evaluate(`(() => {
-          const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')]
-            .filter(b => {
-              const r = b.getBoundingClientRect();
-              return r.width > 0 && r.height > 0;
-            });
-          const btn = buttons.find(b => b.getAttribute('data-name') === 'open-indicators-dialog' || /Indicators, metrics/i.test(b.getAttribute('aria-label') || ''));
-          if (!btn) return null;
-          const r = btn.getBoundingClientRect();
-          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-        })()`);
-        if (!openButton) throw new Error("TradingView Indicators button not found.");
-        await click(openButton.x, openButton.y);
-        await wait(800);
+        await openIndicatorsDialogIfNeeded(evaluate, click, wait);
 
-        const search = await evaluate(`(() => {
-          const input = [...document.querySelectorAll('input')].find(i => i.placeholder === 'Search' && i.getBoundingClientRect().width > 0);
-          if (!input) return null;
-          const r = input.getBoundingClientRect();
-          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-        })()`);
-        if (!search) throw new Error("TradingView indicator search input not found.");
+        const search = await waitForDomResult(evaluate, wait, indicatorSearchInputFromDom, "TradingView indicator search input");
         await click(search.x, search.y);
         await pressControlA();
         await insertText(name);
-        await wait(900);
+        await refreshIndicatorSearch(evaluate, wait);
 
-        const row = await evaluate(`(() => {
+        const row = await waitForDomResult(evaluate, wait, `(() => {
           const target = ${JSON.stringify(name)};
           const rows = [...document.querySelectorAll('div,button,[role=option]')].map(el => {
             const r = el.getBoundingClientRect();
@@ -448,8 +564,7 @@ function defaultTvClient() {
             return { text, x: r.x, y: r.y, w: r.width, h: r.height, visible: r.width > 0 && r.height > 0 };
           }).filter(x => x.visible && x.text === target && x.w > 100);
           return rows[0] || null;
-        })()`);
-        if (!row) throw new Error(`Indicator result not found: ${name}`);
+        })()`, `Indicator result: ${name}`, { attempts: 16, delayMs: 300 });
         await click(row.x + Math.min(row.w - 20, 220), row.y + row.h / 2);
         await wait(1200);
         await pressEscape();
@@ -463,34 +578,19 @@ function defaultTvClient() {
       if (!name || typeof name !== "string") throw new Error("name is required.");
       return withChartPage(async ({ evaluate, click, pressControlA, insertText, pressEscape, wait }) => {
         const before = await evaluate(listVisibleStudiesFromDom);
-        const openButton = await evaluate(`(() => {
-          const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')]
-            .filter(b => {
-              const r = b.getBoundingClientRect();
-              return r.width > 0 && r.height > 0;
-            });
-          const btn = buttons.find(b => b.getAttribute('data-name') === 'open-indicators-dialog' || /Indicators, metrics/i.test(b.getAttribute('aria-label') || ''));
-          if (!btn) return null;
-          const r = btn.getBoundingClientRect();
-          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-        })()`);
-        if (!openButton) throw new Error("TradingView Indicators button not found.");
-        await click(openButton.x, openButton.y);
-        await wait(800);
+        await openIndicatorsDialogIfNeeded(evaluate, click, wait);
 
-        const search = await evaluate(`(() => {
-          const input = [...document.querySelectorAll('input')].find(i => i.placeholder === 'Search' && i.getBoundingClientRect().width > 0);
-          if (!input) return null;
-          const r = input.getBoundingClientRect();
-          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-        })()`);
-        if (!search) throw new Error("TradingView indicator search input not found.");
+        const myScriptsTab = await waitForDomResult(evaluate, wait, myScriptsTabFromDom, "TradingView My scripts tab", { attempts: 12, delayMs: 250 });
+        await click(myScriptsTab.x + Math.min(myScriptsTab.w - 12, 120), myScriptsTab.y + myScriptsTab.h / 2);
+        await wait(500);
+
+        const search = await waitForDomResult(evaluate, wait, indicatorSearchInputFromDom, "TradingView indicator search input");
         await click(search.x, search.y);
         await pressControlA();
         await insertText(name);
-        await wait(900);
+        await refreshIndicatorSearch(evaluate, wait);
 
-        const row = await evaluate(`(() => {
+        const row = await waitForDomResult(evaluate, wait, `(() => {
           const target = ${JSON.stringify(name.toLowerCase())};
           const candidates = [...document.querySelectorAll('[data-name="indicators-dialog"] span, [data-name="indicators-dialog"] div, [role="dialog"] span, [role="dialog"] div')]
             .map(el => {
@@ -500,8 +600,7 @@ function defaultTvClient() {
             })
             .filter(item => item.visible && item.text.toLowerCase() === target && item.w > 40);
           return candidates[0] || null;
-        })()`);
-        if (!row) throw new Error(`Saved Pine strategy result not found: ${name}`);
+        })()`, `Saved Pine strategy result: ${name}`, { attempts: 16, delayMs: 300 });
         await click(row.x + Math.min(row.w - 8, 160), row.y + row.h / 2);
         await wait(1500);
         await pressEscape();
@@ -576,42 +675,22 @@ function defaultTvClient() {
         const hasRsi = after.some(row => /(^|\s)RSI(\s|$)|Relative Strength Index/i.test(`${row.name || ""} ${row.title || ""} ${row.rowText || ""}`));
         let rsiAdded = false;
         if (ensureRsi && !hasRsi) {
-          const openButton = await evaluate(`(() => {
-            const buttons = [...document.querySelectorAll('button[data-name="open-indicators-dialog"], button')]
-              .filter(b => {
-                const r = b.getBoundingClientRect();
-                return r.width > 0 && r.height > 0;
-              });
-            const btn = buttons.find(b => b.getAttribute('data-name') === 'open-indicators-dialog' || /Indicators, metrics/i.test(b.getAttribute('aria-label') || ''));
-            if (!btn) return null;
-            const r = btn.getBoundingClientRect();
-            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-          })()`);
-          if (!openButton) throw new Error("TradingView Indicators button not found.");
-          await click(openButton.x, openButton.y);
-          await wait(800);
+          await openIndicatorsDialogIfNeeded(evaluate, click, wait);
 
-          const search = await evaluate(`(() => {
-            const input = [...document.querySelectorAll('input')].find(i => i.placeholder === 'Search' && i.getBoundingClientRect().width > 0);
-            if (!input) return null;
-            const r = input.getBoundingClientRect();
-            return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-          })()`);
-          if (!search) throw new Error("TradingView indicator search input not found.");
+          const search = await waitForDomResult(evaluate, wait, indicatorSearchInputFromDom, "TradingView indicator search input");
           await click(search.x, search.y);
           await pressControlA();
           await insertText("Relative Strength Index");
-          await wait(900);
+          await refreshIndicatorSearch(evaluate, wait);
 
-          const row = await evaluate(`(() => {
+          const row = await waitForDomResult(evaluate, wait, `(() => {
             const rows = [...document.querySelectorAll('div,button,[role=option]')].map(el => {
               const r = el.getBoundingClientRect();
               const text = (el.innerText || el.textContent || '').trim().replace(/\\s+/g, ' ');
               return { text, x: r.x, y: r.y, w: r.width, h: r.height, visible: r.width > 0 && r.height > 0 };
             }).filter(x => x.visible && x.text === "Relative Strength Index" && x.w > 100);
             return rows[0] || null;
-          })()`);
-          if (!row) throw new Error("Relative Strength Index result not found.");
+          })()`, "Relative Strength Index result", { attempts: 16, delayMs: 300 });
           await click(row.x + Math.min(row.w - 20, 220), row.y + row.h / 2);
           await wait(1200);
           await pressEscape();
@@ -666,7 +745,16 @@ function defaultTvClient() {
           return url.toString();
         })()`);
         await navigate(nextUrl);
-        await wait(2500);
+        await wait(1000);
+        await waitForDomResult(evaluate, wait, `(() => {
+          const expectedSymbol = ${JSON.stringify(tvSymbol.replace(/^DERIV:/, ""))};
+          const visibleText = (document.body?.innerText || document.body?.textContent || '').replace(/\\s+/g, ' ');
+          const buttons = [...document.querySelectorAll('button')].map(button => button.getAttribute('aria-label') || button.innerText || button.textContent || '').join(' ');
+          const url = location.href;
+          const hasChartChrome = /Indicators|Chart interval|Compare symbols/i.test(buttons + ' ' + visibleText);
+          const hasSymbol = visibleText.includes(expectedSymbol) || url.includes(encodeURIComponent(${JSON.stringify(tvSymbol)}));
+          return hasChartChrome && hasSymbol ? { ready: true } : null;
+        })()`, "TradingView chart after navigation", { attempts: 36, delayMs: 500 });
         const afterUrl = await evaluate("location.href");
         return {
           symbol: normalizedSymbol,
@@ -791,6 +879,22 @@ export function createCodexTools({
   const hasTool = name => toolDefs.has(name);
   const externalToolNames = new Set(externalTradingViewTools.map(tool => tool?.name).filter(Boolean));
   const canManageChartStudiesExternally = externalToolNames.has("chart_get_state") && externalToolNames.has("chart_manage_indicator");
+  const openStrategyTesterPanel = async () => {
+    if (typeof tvClient.openStrategyTesterPanel === "function") {
+      return tvClient.openStrategyTesterPanel();
+    }
+    if (externalToolNames.has("ui_open_panel")) {
+      return externalTradingViewCaller("ui_open_panel", {
+        panel: "strategy-tester",
+        action: "open",
+      });
+    }
+    return {
+      opened: false,
+      skipped: true,
+      reason: "No Strategy Tester panel opener is available.",
+    };
+  };
   const cleanChartStudies = async ({ keepNames = ["Relative Strength Index", "RSI"], ensureRsi = true } = {}) => {
     const keep = (Array.isArray(keepNames) ? keepNames : [keepNames])
       .filter(Boolean)
@@ -1006,22 +1110,56 @@ export function createCodexTools({
       },
     ),
     async (args) => {
-      const chart = await handlers.get("tv_set_chart")({
+      const stepTimeoutMs = positiveEnvNumber("CODEX_TV_BACKTEST_STEP_TIMEOUT_MS", 45000);
+      const runStep = async (name, fn) => {
+        try {
+          return { ok: true, value: await withTimeout(fn(), stepTimeoutMs, name) };
+        } catch (error) {
+          return { ok: false, error: errorMessage(error) };
+        }
+      };
+      const chartStep = await runStep("set TradingView chart", () => handlers.get("tv_set_chart")({
         symbol: args.symbol || "VOLATILITY_75",
         timeframe: String(args.timeframe || "15"),
-      });
-      const cleanup = await cleanChartStudies({
-        keepNames: args.keepNames || ["Relative Strength Index", "RSI"],
-        ensureRsi: true,
-      });
-      const strategy = await tvClient.attachSavedPineStrategy({
+      }));
+      const cleanupStep = chartStep.ok
+        ? await runStep("clean TradingView chart studies", () => cleanChartStudies({
+          keepNames: args.keepNames || ["Relative Strength Index", "RSI"],
+          ensureRsi: true,
+        }))
+        : { ok: false, error: "Skipped because chart setup failed." };
+      const strategyStep = cleanupStep.ok
+        ? await runStep("attach saved Pine strategy", () => tvClient.attachSavedPineStrategy({
+          name: args.strategyName || "Breakout Retest V1",
+          readSummary: true,
+        }))
+        : { ok: false, error: "Skipped because chart cleanup failed." };
+      const panelStep = strategyStep.ok && !strategyStep.value?.strategyTester?.hasSummary
+        ? await runStep("open Strategy Tester panel", () => openStrategyTesterPanel())
+        : { ok: true, value: { skipped: true } };
+      const summaryStep = !strategyStep.ok
+        ? { ok: false, error: "Skipped because saved Pine strategy attach failed." }
+        : strategyStep.value?.strategyTester?.hasSummary
+          ? { ok: true, value: strategyStep.value.strategyTester }
+          : await runStep("read Strategy Tester summary", () => tvClient.readStrategyTesterSummary());
+      const chart = chartStep.value || null;
+      const cleanup = cleanupStep.value || null;
+      const strategy = strategyStep.value || {
+        attached: false,
         name: args.strategyName || "Breakout Retest V1",
-        readSummary: true,
-      });
-      const summary = strategy.strategyTester?.hasSummary
-        ? strategy.strategyTester
-        : await tvClient.readStrategyTesterSummary();
+        error: strategyStep.error,
+      };
+      const summary = summaryStep.value || {
+        hasSummary: false,
+        metrics: {},
+        error: summaryStep.error,
+      };
       const blockers = [];
+      if (!chartStep.ok) blockers.push(`Chart setup failed: ${chartStep.error}`);
+      if (!cleanupStep.ok) blockers.push(`Chart cleanup failed: ${cleanupStep.error}`);
+      if (!strategyStep.ok) blockers.push(`Saved Pine strategy attach failed: ${strategyStep.error}`);
+      if (!panelStep.ok && !summary.hasSummary) blockers.push(`Strategy Tester panel open failed: ${panelStep.error}`);
+      if (!summaryStep.ok) blockers.push(`Strategy Tester summary read failed: ${summaryStep.error}`);
       if (!strategy.attached) blockers.push("Saved Pine strategy did not attach to the chart.");
       if (!summary.hasSummary) blockers.push("Strategy Tester summary metrics were not visible/readable.");
       if (summary.invalidData) blockers.push("Strategy Tester reported INVALID DATA.");
@@ -1029,9 +1167,11 @@ export function createCodexTools({
       return {
         ok: blockers.length === 0,
         blockers,
+        stepTimeoutMs,
         chart,
         cleanup,
         strategy,
+        strategyTesterPanel: panelStep.value || null,
         summary,
       };
     },
