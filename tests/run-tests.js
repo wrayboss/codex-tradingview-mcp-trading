@@ -827,6 +827,27 @@ await group("Trading Jarvis command center", () => {
   });
   eq("trade desk allows demo when all gates pass", tradeAllowed.allowed, true);
 
+  const tradeDeskNumericRealBlocked = buildTradeDeskChecklist({
+    explicitExecutionRequest: true,
+    account: { loginid: "CR123", is_virtual: 0 },
+    approval: { demoApproved: true, realApproved: true },
+    openPositions: [],
+    env: { SYMBOL: "VOLATILITY_75", STAKE_USD: "10", STOP_LOSS_USD: "5" },
+  });
+  eq("trade desk blocks numeric real account without env lock", tradeDeskNumericRealBlocked.allowed, false);
+  truthy("trade desk names numeric real account lock blocker", tradeDeskNumericRealBlocked.gates.some(gate => gate.id === "real_account_extra_lock" && gate.pass === false));
+
+  const tradeDeskInvalidRiskBlocked = buildTradeDeskChecklist({
+    explicitExecutionRequest: true,
+    account: { loginid: "VR000", is_virtual: true },
+    approval: { demoApproved: true },
+    openPositions: [],
+    env: { SYMBOL: "VOLATILITY_75", STAKE_USD: "0", STOP_LOSS_USD: "not-a-number" },
+  });
+  eq("trade desk blocks invalid risk values", tradeDeskInvalidRiskBlocked.allowed, false);
+  truthy("trade desk names invalid stake blocker", tradeDeskInvalidRiskBlocked.gates.some(gate => gate.id === "stake_present" && gate.pass === false));
+  truthy("trade desk names invalid stop-loss blocker", tradeDeskInvalidRiskBlocked.gates.some(gate => gate.id === "stop_loss_present" && gate.pass === false));
+
   const morningBrief = buildMorningBriefPlan({
     includeResearch: ["CRASH_500", "BOOM_1000"],
     runtimeHealth: { trades: { unsettled: 1 }, csv: { settlementRows: 2 } },

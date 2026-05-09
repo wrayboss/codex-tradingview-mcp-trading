@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { compareApprovalFingerprint, computeApprovalFingerprint } from "./approvalFingerprint.js";
+import { isDerivRealAccount } from "./derivAccountMode.js";
 
 export function isEnvTrue(value) {
   return value === "true";
@@ -13,7 +14,11 @@ export function assertKillSwitch({ dryRun, env = process.env } = {}) {
 }
 
 export function assertAccountLiveSafety({ dryRun, account, env = process.env } = {}) {
-  if (dryRun || account?.is_virtual !== false) return;
+  if (dryRun) return;
+  if (!account?.loginid) {
+    throw new Error("Deriv account metadata unavailable. Non-dry-run trading is blocked.");
+  }
+  if (!isDerivRealAccount(account)) return;
   if (!isEnvTrue(env.ALLOW_REAL_TRADING) || env.DERIV_ALLOWED_REAL_LOGINID !== account.loginid) {
     throw new Error("Real Deriv account detected. Live trading is blocked until ALLOW_REAL_TRADING=true and DERIV_ALLOWED_REAL_LOGINID matches the authorized loginid.");
   }
@@ -33,7 +38,10 @@ export function loadApprovalRecord(stateDir = "state") {
 
 export function assertApprovalLiveSafety({ dryRun, account, approval, currentFingerprint } = {}) {
   if (dryRun) return;
-  const field = account?.is_virtual === false ? "realApproved" : "demoApproved";
+  if (!account?.loginid) {
+    throw new Error("Deriv account metadata unavailable. Backtest approval cannot be selected.");
+  }
+  const field = isDerivRealAccount(account) ? "realApproved" : "demoApproved";
   if (approval?.[field] !== true) {
     throw new Error(`Backtest approval missing ${field}=true. Re-run npm run validate-backtest <csv...>.`);
   }

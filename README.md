@@ -107,6 +107,8 @@ Wrayboss JARVIS uses these repo-local operator references:
 
 For major breakthroughs, serious planning, or deep repo analysis, use Claude Code Opus first, then have Codex implement the reviewed plan. Routine status checks, tests, and small fixes can go directly to Codex or local shell.
 
+OpenClaw autonomy should use local verification as the source of truth: `npm test`, `npm run scan:secrets`, `npm run codex:check`, and `npm run safe-gate` where relevant. Do not block end-to-end local work on GitHub Actions until a current successful workflow run has been verified for the branch or commit.
+
 For post-merge operator/runtime validation when local credentials are configured, also run:
 
 ```powershell

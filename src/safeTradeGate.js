@@ -1,4 +1,5 @@
 import { resolveResearchSymbol } from "./derivSymbolRegistry.js";
+import { derivAccountMode } from "./derivAccountMode.js";
 
 function isEnvTrue(value) {
   return value === "true";
@@ -15,13 +16,6 @@ function positiveNumber(value) {
 
 function gate(id, label, pass, detail) {
   return { id, label, pass: Boolean(pass), detail };
-}
-
-function accountMode(account) {
-  if (!account?.loginid) return "unknown";
-  if (account.is_virtual === false || account.is_virtual === 0 || account.is_virtual === "0") return "real";
-  if (account.is_virtual === true || account.is_virtual === 1 || account.is_virtual === "1") return "demo";
-  return String(account.loginid).toUpperCase().startsWith("VRTC") ? "demo" : "real";
 }
 
 function resolveSymbol(symbol) {
@@ -43,7 +37,7 @@ export function buildSafeTradeGateReport({
 } = {}) {
   const symbol = env.SYMBOL || "VOLATILITY_75";
   const resolved = resolveSymbol(symbol);
-  const mode = accountMode(account);
+  const mode = derivAccountMode(account);
   const approvalField = mode === "real" ? "realApproved" : "demoApproved";
   const openPositionCount = Array.isArray(openPositions) ? openPositions.length : null;
   const gates = [

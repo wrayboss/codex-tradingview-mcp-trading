@@ -3,6 +3,7 @@ import path from "path";
 import { atrSeries, emaSeries, rsiSeries } from "./indicators.js";
 import { resolveResearchSymbol } from "./derivSymbolRegistry.js";
 import { generateStrategyCandidates } from "./strategyAutonomy.js";
+import { derivAccountMode, isDerivRealAccount } from "./derivAccountMode.js";
 
 export function buildJarvisRoadmap() {
   return {
@@ -426,6 +427,11 @@ function gate(id, label, pass, detail) {
   return { id, label, pass: Boolean(pass), detail };
 }
 
+function positiveNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0;
+}
+
 export function buildTradeDeskChecklist({
   explicitExecutionRequest = false,
   account = null,
@@ -436,17 +442,20 @@ export function buildTradeDeskChecklist({
   const symbol = env.SYMBOL || "VOLATILITY_75";
   let symbolResolved = null;
   try { symbolResolved = resolveResearchSymbol(symbol); } catch {}
-  const isVirtual = account?.is_virtual !== false;
-  const approvalPass = isVirtual ? approval?.demoApproved === true : approval?.realApproved === true;
+  const mode = derivAccountMode(account);
+  const isReal = isDerivRealAccount(account);
+  const approvalPass = isReal ? approval?.realApproved === true : approval?.demoApproved === true;
+  const openPositionCount = Array.isArray(openPositions) ? openPositions.length : null;
   const gates = [
     gate("explicit_current_request", "Explicit execution request in current conversation", explicitExecutionRequest, explicitExecutionRequest ? "present" : "missing"),
-    gate("account_authorized", "Deriv account metadata verified", Boolean(account?.loginid), account?.loginid || "missing"),
-    gate("backtest_approval", isVirtual ? "Demo approval gate" : "Real approval gate", approvalPass, approvalPass ? "approved" : "missing or false"),
-    gate("no_open_positions", "No open Deriv positions", openPositions.length === 0, `${openPositions.length} open position(s)`),
+    gate("account_authorized", "Deriv account metadata verified", Boolean(account?.loginid), account?.loginid ? `${mode}:${account.loginid}` : "missing"),
+    gate("backtest_approval", isReal ? "Real approval gate" : "Demo approval gate", approvalPass, approvalPass ? "approved" : "missing or false"),
+    gate("open_positions_checked", "Open position check", Array.isArray(openPositions), Array.isArray(openPositions) ? "checked" : "not checked"),
+    gate("no_open_positions", "No open Deriv positions", Array.isArray(openPositions) && openPositions.length === 0, openPositionCount == null ? "unknown" : `${openPositionCount} open position(s)`),
     gate("symbol_execution_supported", "Symbol is execution-supported", Boolean(symbolResolved?.executionSupported), symbol),
-    gate("stake_present", "STAKE_USD present", Boolean(env.STAKE_USD), env.STAKE_USD ? "present" : "missing"),
-    gate("stop_loss_present", "STOP_LOSS_USD present", Boolean(env.STOP_LOSS_USD), env.STOP_LOSS_USD ? "present" : "missing"),
-    gate("real_account_extra_lock", "Real account lock", isVirtual || (env.ALLOW_REAL_TRADING === "true" && env.DERIV_ALLOWED_REAL_LOGINID === account?.loginid), isVirtual ? "demo account" : "requires ALLOW_REAL_TRADING and login match"),
+    gate("stake_present", "STAKE_USD positive", positiveNumber(env.STAKE_USD), positiveNumber(env.STAKE_USD) ? `${env.STAKE_USD}` : "STAKE_USD must be a positive number"),
+    gate("stop_loss_present", "STOP_LOSS_USD positive", positiveNumber(env.STOP_LOSS_USD), positiveNumber(env.STOP_LOSS_USD) ? `${env.STOP_LOSS_USD}` : "STOP_LOSS_USD must be a positive number"),
+    gate("real_account_extra_lock", "Real account lock", !isReal || (env.ALLOW_REAL_TRADING === "true" && env.DERIV_ALLOWED_REAL_LOGINID === account?.loginid), !isReal ? "demo account" : "requires ALLOW_REAL_TRADING and login match"),
   ];
   return {
     mode: "trade_desk_check",

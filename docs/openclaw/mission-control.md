@@ -27,3 +27,5 @@ Wrayboss JARVIS should act like a senior system architect with hands-on repo acc
 4. Let Codex implement the approved plan.
 5. Verify with tests, secret scan, and the relevant safety gate.
 6. Commit, push, and report exact status when requested.
+
+GitHub Actions can be useful when a current run is visible and passing, but it is not the autonomy dependency. If Actions has no current run for the commit, continue with local verification and report that CI was not observed.

@@ -275,6 +275,26 @@ export const integrationTests = [
   },
 
   {
+    name: "real account gate — blocks numeric is_virtual real account without ALLOW_REAL_TRADING",
+    async run(eq, truthy) {
+      const dir = `${TMPDIR}-real-numeric-no-allow`;
+      try {
+        approvedBacktest(dir);
+        const factory = makeMockClient({
+          account: { email: "real@test.com", loginid: "CR123", is_virtual: 0, currency: "USD", balance: 1000 },
+          ltfCandles: flatLtfCandles(60),
+        });
+        const result = await runCycle(baseConfig, rules, makeRisk(), {
+          dryRun: false, monitorSettlement: false, stateDir: dir, clientFactory: factory,
+          env: { ALLOW_REAL_TRADING: "false", DERIV_ALLOWED_REAL_LOGINID: "CR123" },
+        });
+        eq("blocked", result, undefined);
+        eq("buy never called", factory()._calls.buy, 0);
+      } finally { cleanTmp(dir); }
+    },
+  },
+
+  {
     name: "real account gate — allows when env gates match",
     async run(eq, truthy) {
       const dir = `${TMPDIR}-real-allowed`;
