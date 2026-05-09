@@ -25,3 +25,12 @@
 - Codex Autonomy Lab may plan, research, test, and locally backtest candidate strategies, but it must remain research-only until explicit strategy expansion and validation gates approve promotion.
 - Do not touch Claude Code MCP/config when working on Codex-side capability.
 - Do not run live/demo execution unless the user explicitly asks in the current conversation and the repo gates are verified.
+
+## Cross-Repo Codex Control Layer
+
+For cross-repo, autonomous, browser, wiki, Cloudflare, or long-running Codex work, also read:
+
+- `C:\Users\NewAdmin\Documents\Codex\2026-05-04\research-on-docs-from-cloudflare-and\agent-control\AGENTS.md`
+- `C:\Users\NewAdmin\Documents\Codex\2026-05-04\research-on-docs-from-cloudflare-and\llm-wiki\AGENTS.md`
+
+These central files supplement this repo's local rules. They do not override this file's token, symbol-scope, Claude Code MCP, execution, or validation-gate boundaries.
