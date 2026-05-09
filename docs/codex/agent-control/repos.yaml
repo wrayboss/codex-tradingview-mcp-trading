@@ -1,0 +1,92 @@
+version: 2
+portable: true
+observed_at_local: "refresh-after-clone"
+observed_from: "repo-local docs/codex portable copy"
+
+repos:
+  povertykillerea:
+    name: "PovertyKillerEA"
+    path: "<set-on-vps>/PovertyKillerEA"
+    git_root: "<set-on-vps>/PovertyKillerEA"
+    windows_reference_path: "C:\\Users\\NewAdmin\\Documents\\GitHub\\PovertyKillerEA"
+    primary_remote:
+      name: "origin"
+      url: "https://github.com/wrayboss/PovertyKillerEA.git"
+    observed_branch: "main"
+    observed_status:
+      branch_line: "## main...origin/main"
+      untracked_preview:
+        - "ml/__pycache__/"
+        - "server/__pycache__/"
+        - "server/auto_engine/__pycache__/"
+        - "server/inference/__pycache__/"
+        - "server/tests/__pycache__/"
+    local_instruction_files:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".env.example"
+      - "package.json"
+      - "README.md"
+    default_workflow:
+      read_only: "May inspect primary checkout after refreshing status."
+      implementation: "Use isolated worktree or branch from origin/main; do not implement on local main."
+      delivery: "Push feature branch and open PR into main; do not merge unless explicitly asked."
+    hard_boundaries:
+      - "TokenModal, token storage, and Deriv token flow."
+      - "Execution hot path: executeTrade, buyContract, sellContract, proposal cache, sendRequest."
+      - "Auto-mode pacing and gates."
+      - "Worker architecture and collector write hardening."
+      - "Read-only ChatGPT app boundary unless explicitly security-scoped."
+    command_inventory:
+      package_manager: "pnpm"
+      scripts:
+        check: "pnpm run check"
+        test: "pnpm test"
+        lint: "pnpm run lint"
+        build: "pnpm run build"
+        scan_secrets: "pnpm run scan:secrets"
+        dev: "pnpm run dev"
+        dev_stack: "pnpm run dev:stack"
+        local_services: "pnpm run check:local"
+
+  tradingview_deriv:
+    name: "claude-tradingview-mcp-trading"
+    path: "<set-on-vps>/claude-tradingview-mcp-trading"
+    git_root: "<set-on-vps>/claude-tradingview-mcp-trading"
+    windows_reference_path: "C:\\Users\\NewAdmin\\claude-tradingview-mcp-trading"
+    primary_remotes:
+      - name: "origin"
+        url: "https://github.com/wrayboss/claude-tradingview-mcp-trading.git"
+      - name: "wrayboss"
+        url: "https://github.com/wrayboss/claude-tradingview-mcp-trading.git"
+    observed_branch: "main"
+    observed_status:
+      branch_line: "## main...origin/main"
+      untracked_preview: []
+    local_instruction_files:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - ".env.example"
+      - "package.json"
+      - "README.md"
+    default_workflow:
+      read_only: "May inspect primary checkout after refreshing status."
+      implementation: "Prefer branch/worktree isolation for risky or multi-file changes."
+      delivery: "Commit only intentional changes; push/PR when requested."
+    hard_boundaries:
+      - "Never print or commit DERIV_API_TOKEN."
+      - "Keep .env local only."
+      - "Do not introduce Crash or Boom symbols unless explicitly scoped."
+      - "Do not touch Claude Code MCP/config for Codex-only capability work."
+      - "Do not run live/demo execution unless explicitly requested in the current conversation and gates are verified."
+    command_inventory:
+      package_manager: "npm"
+      scripts:
+        test: "npm test"
+        codex_check: "npm run codex:check"
+        dry_run: "npm run dry-run"
+        loop_dry: "npm run loop:dry"
+        git_preflight: "npm run git:preflight"
+        validate_backtest: "npm run validate-backtest"
+        scan_secrets: "npm run scan:secrets"
+        launch: "npm run launch"

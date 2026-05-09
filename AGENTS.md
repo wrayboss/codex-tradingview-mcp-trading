@@ -30,7 +30,7 @@
 
 For cross-repo, autonomous, browser, wiki, Cloudflare, or long-running Codex work, also read:
 
-- `C:\Users\NewAdmin\Documents\Codex\2026-05-04\research-on-docs-from-cloudflare-and\agent-control\AGENTS.md`
-- `C:\Users\NewAdmin\Documents\Codex\2026-05-04\research-on-docs-from-cloudflare-and\llm-wiki\AGENTS.md`
+- `docs/codex/agent-control/AGENTS.md`
+- `docs/codex/llm-wiki/AGENTS.md`
 
-These central files supplement this repo's local rules. They do not override this file's token, symbol-scope, Claude Code MCP, execution, or validation-gate boundaries.
+These repo-local copies are the portable VPS source for the shared Codex control layer and LLM wiki. They supplement this repo's local rules and do not override this file's token, symbol-scope, Claude Code MCP, execution, or validation-gate boundaries.
