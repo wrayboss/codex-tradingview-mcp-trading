@@ -7,6 +7,7 @@ import {
   buildCommandCenter,
   buildJarvisRoadmap,
   buildMorningBriefPlan,
+  buildStrategyCompareSurface,
   buildStrategyBuilderBrief,
   buildTradeDeskChecklist,
   scanWatchlist,
@@ -85,6 +86,12 @@ if (command === "plan") {
   result = buildBacktestOperatorChecklist({
     symbols: argValue("symbols", "VOLATILITY_75,VOLATILITY_50").split(",").map(item => item.trim()).filter(Boolean),
     pineFile: argValue("pine-file", "pine/breakout_retest_v1.pine"),
+  });
+} else if (command === "compare-strategy") {
+  result = buildStrategyCompareSurface({
+    rules: JSON.parse(readFileSync("rules.json", "utf8")),
+    currentSummary: readJsonArg("current-summary", null),
+    researchSummary: readJsonArg("research-summary", null),
   });
 } else if (command === "trade-desk") {
   result = buildTradeDeskChecklist({

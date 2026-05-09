@@ -22,6 +22,8 @@ npm run jarvis -- morning-brief --json
 npm run jarvis -- morning-brief --symbols=VOLATILITY_75,VOLATILITY_50 --include-research=CRASH_500,BOOM_1000 --timeframes=60,15 --json
 npm run jarvis -- analyze --file state/research/candles/VOLATILITY_75-900s-500.json --json
 npm run jarvis -- scan --file state/research/watchlist.json --json
+npm run jarvis -- compare-strategy --json
+npm run jarvis -- compare-strategy --current-summary state/research/reports/breakout-summary.json --research-summary state/research/reports/v75-research-summary.json --json
 npm run jarvis -- trade-desk --json
 npm run research:symbols
 npm run research:symbols -- --json
@@ -41,6 +43,8 @@ npm run codex:autonomy -- backtest --file state/research/candles/VOLATILITY_75-9
 `npm run codex:autonomy` is the guarded local research loop. It reports available Codex capabilities, builds a mission plan, and ranks deterministic candidate strategy ideas against candle JSON. It never approves execution, writes `.env`, edits `rules.json`, or places orders.
 
 `npm run jarvis` is the local Trading Jarvis command center. It can produce roadmap, morning-brief, chart-analysis, watchlist-scan, strategy-builder, backtest-operator, and trade-desk checklists. Analysis, scan, and morning-brief commands remain research/operator surfaces; only the existing validated bot commands can place orders.
+
+`npm run jarvis -- compare-strategy` lines up the current executable Breakout Retest strategy against `pine/v75_ema_rsi_momentum_research_v1.pine`. It is read-only, uses the existing local V75 research evidence by default, and computes metric deltas only when both sides are given parsed TradingView Strategy Tester summary objects.
 
 ## Current Research Candidate
 
@@ -75,6 +79,7 @@ Research-shaped tools are broad and read-only:
 - `jarvis_analyze_chart`: candle and setup analysis without execution approval.
 - `jarvis_scan_watchlist`: multi-symbol research scan with execution eligibility labels.
 - `jarvis_morning_brief`: read-only morning brief plan with runtime health context, recommended TradingView tasks, and no execution or scheduling.
+- `jarvis_strategy_compare`: read-only current-vs-research strategy comparison with metric deltas, execution boundaries, and the next backtest/promotion step.
 - `jarvis_trade_desk_check`: fail-closed readiness checklist for explicit demo/live requests.
 
 Morning brief mode is intentionally future-ready but not automated. It sets `readOnly: true`, `tradeExecutionAllowed: false`, `schedulingEnabled: false`, and `liveTradingEnabled: false`. Future scheduling can be layered with Windows Task Scheduler after review, but this repo does not schedule it yet.
