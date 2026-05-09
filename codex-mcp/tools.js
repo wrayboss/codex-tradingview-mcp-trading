@@ -122,6 +122,41 @@ function positiveEnvNumber(name, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+function isWithinPath(childPath, parentPath) {
+  const relative = path.relative(parentPath, childPath);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+export function resolveLocalScreenshotPath(requestedPath, {
+  rootDir = process.cwd(),
+  screenshotDir = "state",
+  now = new Date(),
+} = {}) {
+  const root = path.resolve(rootDir);
+  const screenshotRoot = path.resolve(root, screenshotDir);
+
+  if (requestedPath == null || requestedPath === "") {
+    return path.join(screenshotRoot, `tradingview-${now.toISOString().replace(/[:.]/g, "-")}.png`);
+  }
+
+  const requested = String(requestedPath);
+  if (path.isAbsolute(requested)) {
+    throw new Error("Screenshot path must be relative to the repository screenshot directory.");
+  }
+  if (requested.split(/[\\/]+/).includes("..")) {
+    throw new Error("Screenshot path must not contain parent-directory traversal.");
+  }
+
+  const resolvedFromRoot = path.resolve(root, requested);
+  if (isWithinPath(resolvedFromRoot, screenshotRoot)) return resolvedFromRoot;
+
+  const resolvedFromScreenshotRoot = path.resolve(screenshotRoot, requested);
+  if (!isWithinPath(resolvedFromScreenshotRoot, screenshotRoot)) {
+    throw new Error("Screenshot path must stay within the repository screenshot directory.");
+  }
+  return resolvedFromScreenshotRoot;
+}
+
 function errorMessage(error) {
   return error?.message || String(error);
 }
@@ -284,8 +319,7 @@ function defaultTvClient() {
   }
 
   function resolveScreenshotPath(requestedPath) {
-    const target = requestedPath || path.join(screenshotDir, `tradingview-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
-    return path.resolve(process.cwd(), target);
+    return resolveLocalScreenshotPath(requestedPath, { screenshotDir });
   }
 
   async function withChartPage(fn) {

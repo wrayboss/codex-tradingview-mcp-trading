@@ -5,6 +5,7 @@ import { gitRemotePreflightTests } from "./gitRemotePreflight.js";
 import { emaSeries, rsiSeries, atrSeries, smaSeries, pivotHighAt, pivotLowAt } from "../src/indicators.js";
 import { filterInProgress } from "../src/candleUtils.js";
 import { existsSync, unlinkSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "fs";
+import path from "path";
 import { spawnSync } from "child_process";
 import { findPivots } from "../src/pivots.js";
 import { LevelStore } from "../src/levels.js";
@@ -22,6 +23,7 @@ import {
   normalizeSyntheticSymbol,
   normalizeTradingViewSyntheticSymbol,
   parseStrategyTesterSummaryText,
+  resolveLocalScreenshotPath,
 } from "../codex-mcp/tools.js";
 import { buildRuntimeHealthReport } from "../src/runtimeHealth.js";
 import { formatErrorMessage } from "../src/runtimeWarnings.js";
@@ -935,6 +937,23 @@ await group("codex mcp bridge", async () => {
   eq("normalizes V50 to Deriv symbol", normalizeSyntheticSymbol("VOLATILITY_50"), "R_50");
   eq("normalizes V75 to TradingView chart symbol", normalizeTradingViewSyntheticSymbol("VOLATILITY_75"), "DERIV:VOLATILITY_75_INDEX");
   eq("normalizes V50 to TradingView chart symbol", normalizeTradingViewSyntheticSymbol("VOLATILITY_50"), "DERIV:VOLATILITY_50_INDEX");
+
+  const screenshotDefault = resolveLocalScreenshotPath("", {
+    rootDir: process.cwd(),
+    screenshotDir: "state",
+    now: new Date("2026-01-02T03:04:05.006Z"),
+  });
+  eq("screenshot path default stays under state", screenshotDefault, path.resolve(process.cwd(), "state", "tradingview-2026-01-02T03-04-05-006Z.png"));
+  eq("screenshot path accepts state-relative path", resolveLocalScreenshotPath("state/chart.png"), path.resolve(process.cwd(), "state", "chart.png"));
+  eq("screenshot path places bare filename under state", resolveLocalScreenshotPath("chart.png"), path.resolve(process.cwd(), "state", "chart.png"));
+  let rejectedAbsoluteScreenshotPath = false;
+  try { resolveLocalScreenshotPath(path.resolve(process.cwd(), "rules.json")); }
+  catch { rejectedAbsoluteScreenshotPath = true; }
+  truthy("screenshot path rejects absolute path", rejectedAbsoluteScreenshotPath);
+  let rejectedTraversalScreenshotPath = false;
+  try { resolveLocalScreenshotPath("../rules.json"); }
+  catch { rejectedTraversalScreenshotPath = true; }
+  truthy("screenshot path rejects traversal path", rejectedTraversalScreenshotPath);
 
   let rejected = false;
   try { normalizeSyntheticSymbol("CRASH_500"); }
