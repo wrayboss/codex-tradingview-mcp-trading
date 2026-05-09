@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { spawn } from "child_process";
-import { existsSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import WebSocket from "ws";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -126,6 +126,14 @@ function positiveEnvNumber(name, fallback) {
 function isWithinPath(childPath, parentPath) {
   const relative = path.relative(parentPath, childPath);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function safeLoadRules(rootDir = process.cwd()) {
+  try {
+    return JSON.parse(readFileSync(path.join(rootDir, "rules.json"), "utf8").replace(/^\uFEFF/, ""));
+  } catch {
+    return {};
+  }
 }
 
 export function resolveLocalScreenshotPath(requestedPath, {
@@ -1556,6 +1564,7 @@ export function createCodexTools({
       },
     ),
     async (args) => buildStrategyCompareSurface({
+      rules: safeLoadRules(),
       currentSummary: args.currentSummary || null,
       researchSummary: args.researchSummary || null,
     }),

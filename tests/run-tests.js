@@ -1343,6 +1343,7 @@ await group("codex mcp bridge", async () => {
   eq("Jarvis MCP strategy compare disables execution", jarvisCompare.tradeExecutionAllowed, false);
   eq("Jarvis MCP strategy compare computes pnl delta", jarvisCompare.metricDeltas.find(item => item.field === "totalPnl").delta, 15);
   eq("Jarvis MCP strategy compare keeps research ineligible", jarvisCompare.researchCandidate.executionEligible, false);
+  eq("Jarvis MCP strategy compare loads executable rules", jarvisCompare.currentExecutable.strategyId, "breakout_retest_v1");
 
   const liveEnabledTools = createCodexTools({
     allowLiveTrading: true,
