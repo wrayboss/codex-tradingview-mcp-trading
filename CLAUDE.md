@@ -82,6 +82,15 @@ When reporting results, prefer:
 - Live modes are blocked unless `state/backtest-approved.json` has `approved: true`.
 - `state/bot.pid` is the PID lock — delete it manually only if the bot crashed and left a stale file.
 
+## OpenClaw / Wrayboss JARVIS
+
+- Wrayboss JARVIS is allowed to use Claude Code and Codex CLI in this repo for Wrayboss-approved workflows.
+- Treat `C:\Users\Administrator\Documents\GitHub\claude-tradingview-mcp-trading` as the canonical local repo path.
+- Preserve this repo's safety rules even when OpenClaw has full local system access.
+- Before and after changes, run `git status --short --branch`.
+- For non-trivial repo work, prefer a worktree/branch rather than editing `main` directly.
+- A Telegram `Jarvis status` request is handled by OpenClaw's local status script, not by this repo.
+
 ## Autonomous Operation
 
 `npm run loop` is fully self-contained:

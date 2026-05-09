@@ -34,3 +34,24 @@ For cross-repo, autonomous, browser, wiki, Cloudflare, or long-running Codex wor
 - `docs/codex/llm-wiki/AGENTS.md`
 
 These repo-local copies are the portable VPS source for the shared Codex control layer and LLM wiki. They supplement this repo's local rules and do not override this file's token, symbol-scope, Claude Code MCP, execution, or validation-gate boundaries.
+
+## Wrayboss JARVIS / OpenClaw Integration
+
+- OpenClaw primary agent: Wrayboss JARVIS.
+- OpenClaw repo root is configured to this repository: `C:\Users\Administrator\Documents\GitHub\claude-tradingview-mcp-trading`.
+- Wrayboss is the CEO/owner and final decision maker.
+- OpenClaw has full local PowerShell, terminal, filesystem, Codex CLI, and Claude Code access for Wrayboss-approved workflows in this repo.
+- Use Codex CLI or Claude Code for independent coding-agent passes when useful, but verify their output before reporting completion.
+- For non-trivial edits, prefer an isolated git worktree or feature branch before touching `main`.
+- Always inspect `git status --short --branch` before and after changes.
+- Do not leave temporary access-test files behind.
+
+## Telegram Command Expectations
+
+When Wrayboss triggers this repo from Telegram:
+
+- `repo status` means report `git status --short --branch` for this repo.
+- `run tests` means run `npm test`.
+- `dry run` means run `npm run dry-run`; never place live/demo orders unless explicitly asked in the current conversation and repo gates are verified.
+- `ask codex` means use Codex CLI against this repo.
+- `ask claude` means use Claude Code against this repo.
