@@ -1,4 +1,4 @@
-﻿# Source: TradingView / Deriv PR 21
+# Source: TradingView / Deriv PR 21
 
 URL: https://github.com/wrayboss/claude-tradingview-mcp-trading/pull/21
 

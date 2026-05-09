@@ -1,4 +1,4 @@
-﻿# PovertyKillerEA Runbook
+# PovertyKillerEA Runbook
 
 Repo path: `C:\Users\NewAdmin\Documents\GitHub\PovertyKillerEA`
 

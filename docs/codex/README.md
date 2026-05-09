@@ -1,4 +1,4 @@
-﻿# Codex Portable Control Files
+# Codex Portable Control Files
 
 This folder packages the shared Codex control layer and Karpathy-style LLM wiki inside the repository so a VPS clone can use them without depending on the old Windows Codex workspace.
 

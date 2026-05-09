@@ -1,4 +1,4 @@
-﻿# Goals
+# Goals
 
 ## Active Goal: Autonomous Repo Control
 

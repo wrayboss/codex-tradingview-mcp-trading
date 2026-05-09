@@ -1,4 +1,4 @@
-﻿# Source: Karpathy LLM Wiki Gist
+# Source: Karpathy LLM Wiki Gist
 
 URL: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 

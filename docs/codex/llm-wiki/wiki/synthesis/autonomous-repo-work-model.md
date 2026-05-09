@@ -1,4 +1,4 @@
-﻿# Autonomous Repo Work Model
+# Autonomous Repo Work Model
 
 ## Model
 

@@ -1,4 +1,4 @@
-﻿# Source: PovertyKillerEA PR 327
+# Source: PovertyKillerEA PR 327
 
 URL: https://github.com/wrayboss/PovertyKillerEA/pull/327
 

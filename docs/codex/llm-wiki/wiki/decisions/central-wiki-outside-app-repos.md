@@ -1,4 +1,4 @@
-﻿# Decision: Keep Central Wiki Outside App Repos
+# Decision: Keep Central Wiki Outside App Repos
 
 ## Decision
 

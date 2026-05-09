@@ -1,4 +1,4 @@
-﻿# Cloudflare Benefits
+# Cloudflare Benefits
 
 ## Practical Uses
 

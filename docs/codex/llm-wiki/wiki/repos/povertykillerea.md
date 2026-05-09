@@ -1,4 +1,4 @@
-﻿# PovertyKillerEA
+# PovertyKillerEA
 
 Repo path: `C:\Users\NewAdmin\Documents\GitHub\PovertyKillerEA`
 

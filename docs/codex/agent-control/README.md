@@ -1,4 +1,4 @@
-﻿# Agent Control
+# Agent Control
 
 This folder is the repo-local portable control layer for Codex work across the user's two main repositories. It is intentionally plain Markdown/YAML so it can be read, diffed, and updated without any cloud dependency.
 

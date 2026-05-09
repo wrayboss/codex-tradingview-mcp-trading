@@ -1,4 +1,4 @@
-﻿# VPS Migration Notes
+# VPS Migration Notes
 
 ## Purpose
 

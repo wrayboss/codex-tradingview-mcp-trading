@@ -1,4 +1,4 @@
-﻿# Latest Status Evidence
+# Latest Status Evidence
 
 This portable repo copy intentionally does not include the old workstation status snapshot.
 

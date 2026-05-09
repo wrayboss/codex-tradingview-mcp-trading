@@ -1,4 +1,4 @@
-﻿# LLM Wiki Agent Schema
+# LLM Wiki Agent Schema
 
 This wiki follows Andrej Karpathy's LLM Wiki pattern: raw sources are immutable, the wiki is maintained by the LLM, and this schema tells the agent how to operate.
 

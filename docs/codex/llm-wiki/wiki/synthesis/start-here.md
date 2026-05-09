@@ -1,4 +1,4 @@
-﻿# Start Here
+# Start Here
 
 Use this page at the start of serious Codex work in this repo or on the VPS.
 

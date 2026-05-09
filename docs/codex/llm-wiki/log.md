@@ -1,4 +1,4 @@
-﻿# LLM Wiki Log
+# LLM Wiki Log
 
 ## [2026-05-09] setup | Initial local LLM wiki
 

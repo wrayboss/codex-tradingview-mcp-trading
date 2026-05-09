@@ -1,4 +1,4 @@
-﻿# Validation Commands
+# Validation Commands
 
 Run commands from the repo root shown in each section. Refresh status first.
 

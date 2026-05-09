@@ -1,4 +1,4 @@
-﻿# LLM Wiki Index
+# LLM Wiki Index
 
 This is the content index for the local LLM-maintained wiki.
 

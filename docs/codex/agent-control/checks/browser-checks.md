@@ -1,4 +1,4 @@
-﻿# Browser Checks
+# Browser Checks
 
 Codex has built-in browser capability for local browser work. Use it when the user asks to open, inspect, click, type, test, or screenshot:
 

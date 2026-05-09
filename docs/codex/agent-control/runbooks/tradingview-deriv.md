@@ -1,4 +1,4 @@
-﻿# TradingView / Deriv Runbook
+# TradingView / Deriv Runbook
 
 Repo path: `C:\Users\NewAdmin\claude-tradingview-mcp-trading`
 

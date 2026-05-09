@@ -1,4 +1,4 @@
-﻿# Karpathy LLM Wiki Pattern
+# Karpathy LLM Wiki Pattern
 
 Source: https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 
