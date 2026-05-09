@@ -116,7 +116,7 @@ When reporting results, prefer:
 
 ## TradingView MCP Workflow
 
-1. Run `npm run launch` if TradingView is not already launched with CDP on port `9222`.
+1. Run `npm run launch` if TradingView is not already launched with CDP on port `9222`. Do not kill a running TradingView session by default; it may be Wrayboss's paid-account session. Use `npm run launch:force` only when Wrayboss explicitly approves replacing the running session.
 2. `tv_health_check` must report a connected TradingView target.
 3. Open a 15m TradingView chart for `DERIV:VOLATILITY_75_INDEX` or `DERIV:VOLATILITY_50_INDEX`.
 4. Optional helper: `node scripts/set-chart.js "Volatility 75 Index" 15`.

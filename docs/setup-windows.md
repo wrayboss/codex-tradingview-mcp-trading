@@ -12,7 +12,13 @@ From the repo root:
 npm run launch
 ```
 
-That runs `launch.ps1`, discovers the current TradingView Desktop executable from AppX/MSIX package locations, closes any existing TradingView process, launches TradingView Desktop with `--remote-debugging-port=9222`, and checks the CDP endpoint.
+That runs `launch.ps1`, discovers the current TradingView Desktop executable from AppX/MSIX package locations, reuses an existing CDP-enabled TradingView session, launches TradingView Desktop with `--remote-debugging-port=9222` when no instance is running, and checks the CDP endpoint.
+
+It does not stop an already-running non-CDP TradingView by default. That protects the logged-in paid account session. If you intentionally want Codex to stop and relaunch TradingView, run:
+
+```powershell
+npm run launch:force
+```
 
 If `launch.ps1` cannot find your TradingView executable, use the manual steps below to verify the package path or set a local `TRADINGVIEW_EXE` override. Do not pin the checked-in script to one TradingView package version.
 
@@ -48,16 +54,24 @@ $env:TRADINGVIEW_EXE = "C:\path\to\TradingView.exe"
 npm run launch
 ```
 
+If your paid TradingView account uses a specific local profile, pin that profile before launching:
+
+```powershell
+$env:TRADINGVIEW_USER_DATA_DIR = "C:\path\to\TradingView\User Data"
+npm run launch
+```
+
+Use only the profile that already contains the paid-account login. A wrong user data directory can create a fresh logged-out profile.
+
 ---
 
 ## 3. Launch TradingView with CDP enabled
 
 You need to launch TradingView with the `--remote-debugging-port=9222` flag so local chart tools can connect.
 
-Close TradingView if it's running, then in PowerShell:
+Close TradingView manually if it is running without CDP, then in PowerShell:
 
 ```powershell
-Stop-Process -Name "TradingView" -ErrorAction SilentlyContinue
 & "C:\path\to\TradingView.exe" --remote-debugging-port=9222
 ```
 

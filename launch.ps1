@@ -1,5 +1,7 @@
 param(
-    [switch]$ResolveOnly
+    [switch]$ResolveOnly,
+    [switch]$ForceRelaunch,
+    [string]$UserDataDir = $env:TRADINGVIEW_USER_DATA_DIR
 )
 
 # Launch TradingView Desktop with CDP enabled for local MCP/Codex chart tools.
@@ -8,6 +10,14 @@ param(
 $ErrorActionPreference = "Stop"
 $CDP_PORT = 9222
 $CDP_VERSION_URL = "http://localhost:$CDP_PORT/json/version"
+
+function Test-TradingViewCdp {
+    try {
+        return Invoke-RestMethod -Uri $CDP_VERSION_URL -TimeoutSec 3
+    } catch {
+        return $null
+    }
+}
 
 function Add-TradingViewCandidate {
     param(
@@ -90,29 +100,54 @@ if ($ResolveOnly) {
     exit 0
 }
 
-# Kill any existing TradingView instance so the CDP flag is applied to the new process.
-Write-Host "Stopping any existing TradingView..." -ForegroundColor Yellow
-Stop-Process -Name "TradingView" -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
+$existingCdp = Test-TradingViewCdp
+if ($existingCdp) {
+    Write-Host "TradingView CDP is already available on port $CDP_PORT. Reusing the running session." -ForegroundColor Green
+    Write-Host "  Browser: $($existingCdp.Browser)" -ForegroundColor Gray
+    exit 0
+}
+
+$runningTradingView = @(Get-Process -Name "TradingView" -ErrorAction SilentlyContinue)
+if ($runningTradingView.Count -gt 0 -and -not $ForceRelaunch) {
+    Write-Host "Existing TradingView is running without CDP. Not stopping it by default because it may be the logged-in paid account session." -ForegroundColor Yellow
+    Write-Host "Close TradingView manually, then run npm run launch again; or run .\launch.ps1 -ForceRelaunch if you intentionally want Codex to stop and relaunch it." -ForegroundColor Yellow
+    Write-Host "If needed, pin the paid-profile executable with TRADINGVIEW_EXE and profile data with TRADINGVIEW_USER_DATA_DIR before launching." -ForegroundColor Yellow
+    exit 1
+}
+
+if ($ForceRelaunch -and $runningTradingView.Count -gt 0) {
+    Write-Host "ForceRelaunch requested. Stopping existing TradingView..." -ForegroundColor Yellow
+    Stop-Process -Name "TradingView" -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
 
 # Launch with CDP.
 Write-Host "Launching TradingView with CDP on port $CDP_PORT..." -ForegroundColor Cyan
 Write-Host "  Executable: $TV_EXE" -ForegroundColor Gray
-Start-Process -FilePath $TV_EXE -ArgumentList "--remote-debugging-port=$CDP_PORT"
+$launchArgs = @("--remote-debugging-port=$CDP_PORT")
+if (-not [string]::IsNullOrWhiteSpace($UserDataDir)) {
+    $resolvedUserDataDir = $UserDataDir
+    if (Test-Path -LiteralPath $UserDataDir -PathType Container) {
+        $resolvedUserDataDir = (Resolve-Path -LiteralPath $UserDataDir).Path
+    }
+    Write-Host "  User data dir: $resolvedUserDataDir" -ForegroundColor Gray
+    $launchArgs += "`"--user-data-dir=$resolvedUserDataDir`""
+}
+Start-Process -FilePath $TV_EXE -ArgumentList $launchArgs
 Start-Sleep -Seconds 4
 
 # Verify CDP is up.
-try {
-    $response = Invoke-RestMethod -Uri $CDP_VERSION_URL -TimeoutSec 5
+$response = Test-TradingViewCdp
+if ($response) {
     Write-Host "TradingView connected!" -ForegroundColor Green
     Write-Host "  Browser: $($response.Browser)" -ForegroundColor Gray
-} catch {
+} else {
     Write-Host "Waiting for CDP..." -ForegroundColor Yellow
     Start-Sleep -Seconds 3
-    try {
-        Invoke-RestMethod -Uri $CDP_VERSION_URL -TimeoutSec 5 | Out-Null
+    $response = Test-TradingViewCdp
+    if ($response) {
         Write-Host "TradingView connected!" -ForegroundColor Green
-    } catch {
+    } else {
         Write-Host "CDP not responding - TradingView may still be loading. Try tv_health_check after it opens." -ForegroundColor Red
     }
 }

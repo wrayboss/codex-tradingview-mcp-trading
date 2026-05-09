@@ -75,7 +75,8 @@ Deriv multiplier stakes are locally blocked below `$1.00`; old `0.001` lot-size 
 | `npm run loop` | Live autonomous mode — runs every 15m bar close indefinitely |
 | `npm run loop:dry` | Autonomous loop without placing orders |
 | `npm run validate-backtest <csv...>` | Check TradingView List of Trades exports against 7 go-live gates |
-| `npm run launch` | Relaunch TradingView Desktop with CDP on port `9222` |
+| `npm run launch` | Reuse or launch TradingView Desktop with CDP on port `9222` without stopping a running paid-account session |
+| `npm run launch:force` | Explicitly stop and relaunch TradingView with CDP when you intend to replace the running session |
 | `npm run codex:check` | Self-test the Codex MCP bridge |
 | `npm run git:preflight` | Verify `origin`, current branch, and upstream wiring before push or PR work |
 | `npm run scan:secrets` | Check tracked files for secrets and runtime artifacts before review |
@@ -300,7 +301,9 @@ Start TradingView Desktop with the Chrome DevTools Protocol port before using ch
 npm run launch
 ```
 
-That script resolves the installed TradingView Desktop executable from the current Windows AppX/MSIX package location, closes any running TradingView process, starts TradingView with `--remote-debugging-port=9222`, and checks `http://localhost:9222/json/version`. If TradingView is installed outside the normal package paths, see `docs/setup-windows.md` for the `TRADINGVIEW_EXE` override.
+That script resolves the installed TradingView Desktop executable from the current Windows AppX/MSIX package location, reuses an existing CDP-enabled TradingView session, starts TradingView with `--remote-debugging-port=9222` when no instance is running, and checks `http://localhost:9222/json/version`. It does not stop a running non-CDP TradingView by default because that may be the logged-in paid account session. If you intentionally want Codex to replace the running session, use `npm run launch:force`.
+
+If TradingView is installed outside the normal package paths, see `docs/setup-windows.md` for the `TRADINGVIEW_EXE` override. If the paid account lives in a specific local profile, set `TRADINGVIEW_USER_DATA_DIR` before launch so Codex uses that profile.
 
 After launch, confirm the bridge can see TradingView:
 

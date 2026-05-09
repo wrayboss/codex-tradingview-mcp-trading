@@ -1003,6 +1003,9 @@ await group("Windows TradingView launcher", () => {
   truthy("launcher discovers AppX install locations", launcher.includes("Get-AppxPackage"));
   truthy("launcher can resolve without starting TradingView", launcher.includes("ResolveOnly"));
   truthy("launcher keeps CDP verification on 9222", launcher.includes("$CDP_PORT = 9222") && launcher.includes("/json/version"));
+  truthy("launcher does not stop existing paid-session TradingView by default", launcher.includes("ForceRelaunch") && launcher.includes("Existing TradingView is running without CDP"));
+  truthy("launcher supports explicit paid profile user data dir", launcher.includes("TRADINGVIEW_USER_DATA_DIR") && launcher.includes("--user-data-dir="));
+  truthy("launcher quotes paid profile user data dir for paths with spaces", launcher.includes("`\"--user-data-dir="));
 
   const dir = "state-test-launcher";
   try {

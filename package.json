@@ -22,6 +22,7 @@
     "test": "node tests/run-tests.js",
     "git:preflight": "node scripts/git-remote-preflight.js",
     "launch": "powershell -ExecutionPolicy Bypass -File launch.ps1",
+    "launch:force": "powershell -ExecutionPolicy Bypass -File launch.ps1 -ForceRelaunch",
     "validate-backtest": "node scripts/validate-backtest.js",
     "scan:secrets": "node scripts/scan-secrets.js"
   },
