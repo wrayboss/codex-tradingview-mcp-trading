@@ -29,6 +29,7 @@ import {
 } from "../codex-mcp/tools.js";
 import { buildRuntimeHealthReport } from "../src/runtimeHealth.js";
 import { formatErrorMessage } from "../src/runtimeWarnings.js";
+import { buildSafeTradeGateReport, formatSafeTradeGateReport } from "../src/safeTradeGate.js";
 import {
   getResearchSymbolCatalog,
   normalizeDerivResearchSymbol,
@@ -449,6 +450,94 @@ await group("runtime health", () => {
     rmSync(missingDir, { recursive: true, force: true });
     rmSync(fixtureDir, { recursive: true, force: true });
   }
+});
+
+await group("safe trade gate", () => {
+  const baseEnv = {
+    DERIV_API_TOKEN: "redacted-test-token",
+    SYMBOL: "VOLATILITY_75",
+    STAKE_USD: "1",
+    STOP_LOSS_USD: "3",
+    TRADING_KILL_SWITCH: "",
+  };
+  const demoAccount = { loginid: "VRTC123", is_virtual: true, currency: "USD" };
+  const realAccount = { loginid: "CR123", is_virtual: false, currency: "USD" };
+  const demoApproval = { demoApproved: true, realApproved: false };
+  const realApproval = { demoApproved: true, realApproved: true };
+
+  const missingExplicit = buildSafeTradeGateReport({
+    env: baseEnv,
+    account: demoAccount,
+    approval: demoApproval,
+    openPositions: [],
+  });
+  eq("safe trade gate blocks without explicit request", missingExplicit.allowed, false);
+  truthy("safe trade gate names explicit request blocker", missingExplicit.blockers.some(item => item.includes("explicit current-chat execution request")));
+
+  const unknownPositions = buildSafeTradeGateReport({
+    explicitExecutionRequest: true,
+    env: baseEnv,
+    account: demoAccount,
+    approval: demoApproval,
+    openPositions: null,
+  });
+  eq("safe trade gate blocks when open positions are unknown", unknownPositions.allowed, false);
+  truthy("safe trade gate names open position blocker", unknownPositions.blockers.some(item => item.includes("Open position check")));
+
+  const demoAllowed = buildSafeTradeGateReport({
+    explicitExecutionRequest: true,
+    env: baseEnv,
+    account: demoAccount,
+    approval: demoApproval,
+    openPositions: [],
+  });
+  eq("safe trade gate allows demo when all gates pass", demoAllowed.allowed, true);
+  eq("safe trade gate is read-only", demoAllowed.readOnly, true);
+  eq("safe trade gate makes no network calls by default", demoAllowed.networkCalls, false);
+
+  const realBlocked = buildSafeTradeGateReport({
+    explicitExecutionRequest: true,
+    env: baseEnv,
+    account: realAccount,
+    approval: realApproval,
+    openPositions: [],
+  });
+  eq("safe trade gate blocks real account without env lock", realBlocked.allowed, false);
+  truthy("safe trade gate names real account lock blocker", realBlocked.blockers.some(item => item.includes("ALLOW_REAL_TRADING")));
+
+  const realAllowed = buildSafeTradeGateReport({
+    explicitExecutionRequest: true,
+    env: { ...baseEnv, ALLOW_REAL_TRADING: "true", DERIV_ALLOWED_REAL_LOGINID: "CR123" },
+    account: realAccount,
+    approval: realApproval,
+    openPositions: [],
+  });
+  eq("safe trade gate allows real account only with matching env lock", realAllowed.allowed, true);
+
+  const numericRealBlocked = buildSafeTradeGateReport({
+    explicitExecutionRequest: true,
+    env: baseEnv,
+    account: { loginid: "CR999", is_virtual: 0, currency: "USD" },
+    approval: realApproval,
+    openPositions: [],
+  });
+  eq("safe trade gate treats numeric is_virtual=0 as real account", numericRealBlocked.account.mode, "real");
+  eq("safe trade gate blocks numeric real account without env lock", numericRealBlocked.allowed, false);
+
+  const invalidRisk = buildSafeTradeGateReport({
+    explicitExecutionRequest: true,
+    env: { ...baseEnv, STAKE_USD: "0", STOP_LOSS_USD: "not-a-number" },
+    account: demoAccount,
+    approval: demoApproval,
+    openPositions: [],
+  });
+  eq("safe trade gate blocks invalid stake and stop-loss values", invalidRisk.allowed, false);
+  truthy("safe trade gate names invalid stake blocker", invalidRisk.blockers.some(item => item.includes("STAKE_USD must be a positive number")));
+  truthy("safe trade gate names invalid stop-loss blocker", invalidRisk.blockers.some(item => item.includes("STOP_LOSS_USD must be a positive number")));
+
+  const formatted = formatSafeTradeGateReport(demoAllowed);
+  truthy("safe trade gate format includes allowed", formatted.includes("allowed: true"));
+  truthy("safe trade gate format includes symbol", formatted.includes("VOLATILITY_75"));
 });
 
 await group("settlement csv idempotency", () => {

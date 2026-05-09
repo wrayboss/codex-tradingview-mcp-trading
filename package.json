@@ -11,6 +11,7 @@
     "dry-run": "node bot.js --dry-run",
     "jarvis": "node scripts/jarvis.js",
     "runtime:health": "node scripts/runtime-health.js",
+    "safe-gate": "node scripts/safe-trade-gate.js",
     "codex:autonomy": "node scripts/codex-autonomy.js",
     "codex:doctor": "node scripts/codex-doctor.js",
     "codex:mcp": "node codex-mcp/server.js",

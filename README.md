@@ -63,6 +63,7 @@ Deriv multiplier stakes are locally blocked below `$1.00`; old `0.001` lot-size 
 | `npm run jarvis -- analyze --file <candle-json> --json` | Analyze a candle set for chart bias, setup quality, and next action without approving execution |
 | `npm run jarvis -- scan --file <watchlist-json> --json` | Rank watchlist candle sets while marking non-execution symbols as research-only |
 | `npm run jarvis -- trade-desk --json` | Run a fail-closed trade-desk checklist before any explicit demo/live request |
+| `npm run safe-gate` | Run a read-only execution-readiness gate that fails closed unless explicit execution, account, approval, and open-position checks pass |
 | `npm run dry-run` | Connect to Deriv, evaluate strategy, log decision — no order |
 | `npm run codex:autonomy -- status` | Show Codex Autonomy Lab capabilities and guardrails |
 | `npm run codex:autonomy -- plan --symbols=VOLATILITY_75,CRASH_500` | Build a research-only strategy mission plan |
@@ -93,6 +94,18 @@ node scripts/validate-backtest.js
 ```
 
 `node scripts/validate-backtest.js` with no CSV must exit with code `1` and print usage text. CI treats that as an intentional usage check, not as a broken workflow.
+
+`npm run safe-gate -- --json` should also fail closed by default in CI or local validation unless a current explicit execution request, verified Deriv account state, backtest approval, risk settings, and open-position check are all present. Use `npm run safe-gate -- --check-deriv --explicit` only when Wrayboss explicitly asks for demo/live execution readiness in the current conversation; it is read-only and must not place orders.
+
+## OpenClaw Mission Control
+
+Wrayboss JARVIS uses these repo-local operator references:
+
+- `docs/openclaw/mission-control.md` for Telegram/OpenClaw command routing.
+- `docs/openclaw/task-templates.md` for repeatable repo task prompts.
+- `docs/openclaw/opus-to-codex-workflow.md` for the preferred Claude Opus planning to Codex implementation workflow.
+
+For major breakthroughs, serious planning, or deep repo analysis, use Claude Code Opus first, then have Codex implement the reviewed plan. Routine status checks, tests, and small fixes can go directly to Codex or local shell.
 
 For post-merge operator/runtime validation when local credentials are configured, also run:
 

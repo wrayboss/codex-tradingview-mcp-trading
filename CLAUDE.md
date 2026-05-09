@@ -35,11 +35,13 @@ npm run dry-run
 npm run loop          # autonomous — runs every 15m bar close, no user input needed
 npm run loop:dry      # autonomous loop, no orders placed
 npm run trade         # single cycle
+npm run safe-gate     # read-only execution-readiness gate; fails closed by default
 npm run validate-backtest <tv-export.csv...>   # check 7 go-live gates
 npm run launch        # launch TradingView Desktop with CDP on port 9222
 ```
 
 Use `npm run dry-run` before live/demo order placement. Dry-run still authorizes Deriv and fetches candles, but it must never place orders.
+Use `npm run safe-gate -- --check-deriv --explicit` only when Wrayboss explicitly asks for execution readiness in the current conversation. It is read-only and must fail closed if account state, open positions, approvals, risk env, or real-account locks are missing.
 Use `npm run loop` for fully autonomous live/demo operation after backtest gates approve.
 
 When reporting results, prefer:
@@ -87,6 +89,7 @@ When reporting results, prefer:
 - Wrayboss JARVIS is allowed to use Claude Code and Codex CLI in this repo for Wrayboss-approved workflows.
 - Treat `C:\Users\Administrator\Documents\GitHub\claude-tradingview-mcp-trading` as the canonical local repo path.
 - Preserve this repo's safety rules even when OpenClaw has full local system access.
+- For serious planning, major breakthroughs, or deep repo archaeology, use Claude Code Opus first. Codex should implement the reviewed Opus plan.
 - Before and after changes, run `git status --short --branch`.
 - For non-trivial repo work, prefer a worktree/branch rather than editing `main` directly.
 - A Telegram `Jarvis status` request is handled by OpenClaw's local status script, not by this repo.
