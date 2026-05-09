@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { atrSeries, emaSeries, rsiSeries } from "./indicators.js";
 import { resolveResearchSymbol } from "./derivSymbolRegistry.js";
+import { generateStrategyCandidates } from "./strategyAutonomy.js";
 
 export function buildJarvisRoadmap() {
   return {
@@ -277,6 +278,147 @@ export function buildBacktestOperatorChecklist({ symbols = ["VOLATILITY_75", "VO
       { id: "approval_review", command: "read state/backtest-approved.json and report failed gates" },
     ],
     writesApprovalOnlyViaValidator: true,
+  };
+}
+
+function normalizeStrategyTesterSummary(summary = null) {
+  if (!summary || typeof summary !== "object") {
+    return {
+      hasSummary: false,
+      invalidData: false,
+      metrics: {},
+      availableMetricFields: [],
+      missing: true,
+    };
+  }
+  const metrics = summary.metrics && typeof summary.metrics === "object" ? summary.metrics : {};
+  return {
+    hasSummary: Boolean(summary.hasSummary),
+    invalidData: Boolean(summary.invalidData),
+    metrics,
+    availableMetricFields: Object.keys(metrics).sort(),
+    rawText: summary.rawText,
+  };
+}
+
+function metricNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const cleaned = value.replace(/,/g, "").replace(/%$/, "").trim();
+  if (!cleaned || cleaned === "-" || cleaned === "\u2014") return null;
+  const numeric = Number(cleaned);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function metricDeltas(currentMetrics = {}, researchMetrics = {}) {
+  const fields = [
+    "totalPnl",
+    "totalPnlPercent",
+    "maxEquityDrawdown",
+    "maxEquityDrawdownPercent",
+    "totalTrades",
+    "profitableTrades",
+    "profitFactor",
+  ];
+
+  return fields.map(field => {
+    const current = currentMetrics[field];
+    const research = researchMetrics[field];
+    const currentNumber = metricNumber(current);
+    const researchNumber = metricNumber(research);
+    return {
+      field,
+      current,
+      research,
+      delta: currentNumber == null || researchNumber == null
+        ? null
+        : Number((researchNumber - currentNumber).toFixed(6)),
+      comparable: currentNumber != null && researchNumber != null,
+    };
+  });
+}
+
+function researchV75Evidence() {
+  return generateStrategyCandidates({ symbol: "VOLATILITY_75" })
+    .find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v1")?.evidence || null;
+}
+
+export function buildStrategyCompareSurface({
+  rules = {},
+  currentSummary = null,
+  researchSummary = null,
+  currentStrategyName = "Breakout Retest V1",
+  researchStrategyName = "V75 EMA RSI Momentum Research V1",
+} = {}) {
+  const currentTvSummary = normalizeStrategyTesterSummary(currentSummary);
+  const researchTvSummary = normalizeStrategyTesterSummary(researchSummary);
+  const executionSymbols = Array.isArray(rules.symbols) && rules.symbols.length ? rules.symbols : ["VOLATILITY_75", "VOLATILITY_50"];
+  const researchSymbol = resolveResearchSymbol("VOLATILITY_75");
+  const localEvidence = researchV75Evidence();
+  const deltas = metricDeltas(currentTvSummary.metrics, researchTvSummary.metrics);
+  const comparableDeltas = deltas.filter(item => item.comparable);
+  const blockers = [];
+  if (!currentTvSummary.hasSummary) blockers.push("Current executable Strategy Tester summary is missing; attach Breakout Retest V1 and read visible summary metrics.");
+  if (!researchTvSummary.hasSummary) blockers.push("Research candidate Strategy Tester summary is missing; attach V75 EMA RSI Momentum Research V1 and read visible summary metrics.");
+  if (currentTvSummary.invalidData) blockers.push("Current executable Strategy Tester summary reports INVALID DATA.");
+  if (researchTvSummary.invalidData) blockers.push("Research candidate Strategy Tester summary reports INVALID DATA.");
+  if (!comparableDeltas.length) blockers.push("No comparable TradingView summary metric deltas are available yet.");
+
+  return {
+    mode: "jarvis_strategy_compare",
+    readOnly: true,
+    tradeExecutionAllowed: false,
+    liveTradingEnabled: false,
+    tokenRequired: false,
+    writesRuntimeState: false,
+    currentExecutable: {
+      name: currentStrategyName,
+      strategyId: rules.strategy || "breakout_retest_v1",
+      pineFile: "pine/breakout_retest_v1.pine",
+      symbols: executionSymbols.map(symbol => {
+        const resolved = resolveResearchSymbol(symbol);
+        return {
+          symbol: resolved.symbol,
+          derivSymbol: resolved.derivSymbol,
+          tradingViewSymbol: resolved.tradingViewSymbol,
+          executionEligible: resolved.executionSupported,
+        };
+      }),
+      entryTimeframe: String(rules.timeframes?.entry || "15"),
+      structureTimeframe: String(rules.timeframes?.structure || "60"),
+      executionEligible: true,
+      localEvidence: {
+        status: "runtime_strategy",
+        source: "rules.json and pine/breakout_retest_v1.pine",
+        summary: rules.description || "1H breakout/retest with EMA/RSI trend filter.",
+      },
+      tradingViewSummary: currentTvSummary,
+    },
+    researchCandidate: {
+      name: researchStrategyName,
+      strategyId: "v75_ema_rsi_momentum_research_v1",
+      pineFile: "pine/v75_ema_rsi_momentum_research_v1.pine",
+      symbol: {
+        symbol: researchSymbol.symbol,
+        derivSymbol: researchSymbol.derivSymbol,
+        tradingViewSymbol: researchSymbol.tradingViewSymbol,
+        executionEligible: false,
+      },
+      executionEligible: false,
+      promotionRequired: true,
+      localEvidence,
+      tradingViewSummary: researchTvSummary,
+    },
+    metricDeltas: deltas,
+    boundaries: [
+      "This compare surface is read-only and does not place orders.",
+      "The research Pine remains execution-ineligible until strategy scope, tests, TradingView export validation, and approval gates are intentionally promoted.",
+      "Do not use this output as demo/live approval; use npm run validate-backtest <tv-export.csv...> on exported Strategy Tester trades.",
+    ],
+    blockers,
+    nextConcreteStep: blockers.length
+      ? "In TradingView, attach both saved Pine strategies on DERIV:VOLATILITY_75_INDEX 15m, read Strategy Tester summaries for each, then rerun this compare with --current-summary and --research-summary."
+      : "Export the research candidate Strategy Tester List of Trades CSV and run npm run validate-backtest <tv-export.csv...>; review state/backtest-approved.json before any explicit demo/live promotion discussion.",
   };
 }
 

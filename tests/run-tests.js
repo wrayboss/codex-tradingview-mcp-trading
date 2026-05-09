@@ -47,6 +47,7 @@ import {
   buildCommandCenter,
   buildJarvisRoadmap,
   buildMorningBriefPlan,
+  buildStrategyCompareSurface,
   buildStrategyBuilderBrief,
   buildTradeDeskChecklist,
   scanWatchlist,
@@ -704,6 +705,17 @@ await group("Trading Jarvis command center", () => {
   truthy("backtest checklist includes Strategy Tester export", backtestChecklist.steps.some(step => step.id === "export_strategy_tester_trades"));
   truthy("backtest checklist includes validate-backtest", backtestChecklist.steps.some(step => step.command.includes("validate-backtest")));
 
+  const compareSurface = buildStrategyCompareSurface({
+    rules: { strategy: "breakout_retest_v1", symbols: ["VOLATILITY_75"], timeframes: { structure: "60", entry: "15" } },
+    currentSummary: { hasSummary: true, metrics: { totalTrades: 12, totalPnl: 100, profitFactor: "1.2" } },
+    researchSummary: { hasSummary: true, metrics: { totalTrades: 20, totalPnl: 150, profitFactor: "1.5" } },
+  });
+  eq("strategy compare is read-only", compareSurface.readOnly, true);
+  eq("strategy compare disables trade execution", compareSurface.tradeExecutionAllowed, false);
+  eq("strategy compare marks research candidate ineligible", compareSurface.researchCandidate.executionEligible, false);
+  eq("strategy compare computes total trade delta", compareSurface.metricDeltas.find(item => item.field === "totalTrades").delta, 8);
+  truthy("strategy compare includes local research evidence", compareSurface.researchCandidate.localEvidence.test.trades > 0);
+
   const tradeBlocked = buildTradeDeskChecklist({
     explicitExecutionRequest: false,
     account: { loginid: "VR000", is_virtual: true },
@@ -771,6 +783,21 @@ await group("Trading Jarvis command center", () => {
   const morningCliPlan = JSON.parse(morningCliStdout.slice(morningCliStdout.indexOf("{")));
   eq("morning brief CLI reports readOnly true", morningCliPlan.readOnly, true);
   eq("morning brief CLI reports trade execution disabled", morningCliPlan.tradeExecutionAllowed, false);
+
+  const compareCli = process.platform === "win32"
+    ? spawnSync("cmd.exe", ["/d", "/s", "/c", "npm", "run", "jarvis", "--", "compare-strategy", "--json"], {
+      encoding: "utf8",
+      env: { ...process.env, DERIV_API_TOKEN: "" },
+    })
+    : spawnSync("npm", ["run", "jarvis", "--", "compare-strategy", "--json"], {
+      encoding: "utf8",
+      env: { ...process.env, DERIV_API_TOKEN: "" },
+    });
+  eq("npm run jarvis -- compare-strategy --json exits cleanly", compareCli.status, 0);
+  const compareCliStdout = compareCli.stdout || compareCli.output?.filter(Boolean).join("");
+  const compareCliPlan = JSON.parse(compareCliStdout.slice(compareCliStdout.indexOf("{")));
+  eq("strategy compare CLI reports readOnly true", compareCliPlan.readOnly, true);
+  eq("strategy compare CLI keeps research ineligible", compareCliPlan.researchCandidate.executionEligible, false);
 
   const cliDir = "state-test-jarvis-cli";
   try {
@@ -1030,6 +1057,7 @@ await group("codex mcp bridge", async () => {
   truthy("lists Jarvis scan watchlist tool", names.includes("jarvis_scan_watchlist"));
   truthy("lists Jarvis trade desk tool", names.includes("jarvis_trade_desk_check"));
   truthy("lists Jarvis morning brief tool", names.includes("jarvis_morning_brief"));
+  truthy("lists Jarvis strategy compare tool", names.includes("jarvis_strategy_compare"));
   eq("live trade tool hidden by default", names.includes("deriv_place_multiplier_trade"), false);
 
   const health = await tools.call("tv_health_check", {});
@@ -1306,6 +1334,15 @@ await group("codex mcp bridge", async () => {
   eq("Jarvis MCP morning brief is read-only", jarvisBrief.readOnly, true);
   eq("Jarvis MCP morning brief disables execution", jarvisBrief.tradeExecutionAllowed, false);
   eq("Jarvis MCP morning brief marks Crash research-only", jarvisBrief.symbols.find(item => item.symbol === "CRASH_500").executionEligible, false);
+
+  const jarvisCompare = await tools.call("jarvis_strategy_compare", {
+    currentSummary: { hasSummary: true, metrics: { totalTrades: 5, totalPnl: 10, profitFactor: "1.0" } },
+    researchSummary: { hasSummary: true, metrics: { totalTrades: 8, totalPnl: 25, profitFactor: "1.5" } },
+  });
+  eq("Jarvis MCP strategy compare is read-only", jarvisCompare.readOnly, true);
+  eq("Jarvis MCP strategy compare disables execution", jarvisCompare.tradeExecutionAllowed, false);
+  eq("Jarvis MCP strategy compare computes pnl delta", jarvisCompare.metricDeltas.find(item => item.field === "totalPnl").delta, 15);
+  eq("Jarvis MCP strategy compare keeps research ineligible", jarvisCompare.researchCandidate.executionEligible, false);
 
   const liveEnabledTools = createCodexTools({
     allowLiveTrading: true,

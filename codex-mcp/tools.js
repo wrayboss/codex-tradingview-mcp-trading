@@ -26,6 +26,7 @@ import {
   analyzeChartCandles,
   buildCommandCenter,
   buildMorningBriefPlan,
+  buildStrategyCompareSurface,
   buildTradeDeskChecklist,
   scanWatchlist,
 } from "../src/tradingJarvis.js";
@@ -1543,6 +1544,21 @@ export function createCodexTools({
         },
       });
     },
+  );
+
+  addTool(
+    "jarvis_strategy_compare",
+    textSchema(
+      "Build a read-only operator comparison between the executable Breakout Retest strategy and the V75 EMA/RSI research Pine candidate.",
+      {
+        currentSummary: { type: "object", additionalProperties: true, description: "Optional parsed TradingView Strategy Tester summary for Breakout Retest V1." },
+        researchSummary: { type: "object", additionalProperties: true, description: "Optional parsed TradingView Strategy Tester summary for V75 EMA RSI Momentum Research V1." },
+      },
+    ),
+    async (args) => buildStrategyCompareSurface({
+      currentSummary: args.currentSummary || null,
+      researchSummary: args.researchSummary || null,
+    }),
   );
 
   if (allowLiveTrading) {
