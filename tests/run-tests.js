@@ -18,6 +18,7 @@ import { CSV_HEADERS, SAFETY_LOG_SCHEMA_VERSION, prepareRuntimeArtifacts, append
 import { getDerivTradeConstraints, resolveMultiplierForSymbol, validateDerivTradeSize } from "../src/tradeConstraints.js";
 import { getOperatorWatchlist, resolveActiveWatchlist, resolveOperatorSymbol } from "../src/watchlist.js";
 import {
+  buildStrategyTesterMetricBlockers,
   buildSavedPineStrategyAttachmentResult,
   createCodexTools,
   normalizeSyntheticSymbol,
@@ -850,6 +851,12 @@ await group("TradingView Strategy Tester parsing", () => {
   const commaTradeSummary = parseStrategyTesterSummaryText("Strategy Report Codex Quantity Probe Fixed Total trades 2,101 Profitable trades 48.83% Profit factor 0.923");
   eq("strategy tester parser reads comma-separated total trades", commaTradeSummary.metrics.totalTrades, 2101);
 
+  const visibleThresholdSummary = parseStrategyTesterSummaryText("Strategy Report Breakout Retest V1 Total P&L 25 USD 0.25% Max equity drawdown 1,600 USD 16.00% Total trades 49 Profitable trades 42.00% Profit factor 1.8");
+  const thresholdBlockers = buildStrategyTesterMetricBlockers(visibleThresholdSummary);
+  eq("strategy tester visible threshold blockers include win rate", thresholdBlockers.find(item => item.metric === "winRate")?.threshold, 0.45);
+  eq("strategy tester visible threshold blockers include max drawdown", thresholdBlockers.find(item => item.metric === "maxDrawdown")?.threshold, 0.15);
+  eq("strategy tester visible threshold blockers include trade count", thresholdBlockers.find(item => item.metric === "totalTrades")?.threshold, 50);
+
   const exactAttach = buildSavedPineStrategyAttachmentResult({
     name: "Breakout Retest V1",
     before: [{ name: "Relative Strength Index" }],
@@ -1122,7 +1129,7 @@ await group("codex mcp bridge", async () => {
       setChart: async (args) => ({ symbol: args.symbol, timeframe: args.timeframe }),
       cleanChartStudies: async () => ({ cleaned: true, after: [{ name: "RSI", title: "Relative Strength Index" }] }),
       attachSavedPineStrategy: async (args) => ({ attached: true, name: args.name, strategyTester: { hasSummary: false, metrics: {} } }),
-      readStrategyTesterSummary: async () => ({ hasSummary: true, invalidData: false, metrics: { totalTrades: 2 } }),
+      readStrategyTesterSummary: async () => ({ hasSummary: true, invalidData: false, metrics: { totalTrades: 64 } }),
     },
     derivClientFactory: () => { throw new Error("Deriv client should not be used by backtest workflow check."); },
     strategyEvaluator: async () => ({ mode: "DRY_RUN" }),
@@ -1160,7 +1167,7 @@ await group("codex mcp bridge", async () => {
   eq("backtest workflow check rejects invalid Strategy Tester data", invalidWorkflow.ok, false);
   truthy("backtest workflow check reports invalid data blocker", invalidWorkflow.blockers.some(item => /invalid data/i.test(item)));
 
-  const lowProfitFactorSummary = parseStrategyTesterSummaryText("Strategy Report Breakout Retest V1 Total P&L -25 USD -0.25% Max equity drawdown 400 USD 4.00% Total trades 64 Profitable trades 42.19% Profit factor 0.933");
+  const lowProfitFactorSummary = parseStrategyTesterSummaryText("Strategy Report Breakout Retest V1 Total P&L -25 USD -0.25% Max equity drawdown 400 USD 4.00% Total trades 64 Profitable trades 50.00% Profit factor 0.933");
   const lowProfitFactorTools = createCodexTools({
     allowLiveTrading: false,
     externalTradingViewTools: [],
@@ -1187,6 +1194,36 @@ await group("codex mcp bridge", async () => {
   eq("backtest workflow check reports profit factor metric blocker", lowProfitFactorWorkflow.metricBlockers?.[0]?.metric, "profitFactor");
   eq("backtest workflow check reports visible profit factor value", lowProfitFactorWorkflow.metricBlockers?.[0]?.actual, 0.933);
   eq("backtest workflow check reports profit factor threshold", lowProfitFactorWorkflow.metricBlockers?.[0]?.threshold, 1.6);
+
+  const otherVisibleThresholdSummary = parseStrategyTesterSummaryText("Strategy Report Breakout Retest V1 Total P&L 25 USD 0.25% Max equity drawdown 1,600 USD 16.00% Total trades 49 Profitable trades 42.00% Profit factor 1.8");
+  const otherVisibleThresholdTools = createCodexTools({
+    allowLiveTrading: false,
+    externalTradingViewTools: [],
+    tvClient: {
+      setChart: async (args) => ({ symbol: args.symbol, timeframe: args.timeframe }),
+      cleanChartStudies: async () => ({ cleaned: true, after: [{ name: "RSI", title: "Relative Strength Index" }] }),
+      attachSavedPineStrategy: async (args) => ({
+        attached: true,
+        name: args.name,
+        strategyTester: otherVisibleThresholdSummary,
+      }),
+      readStrategyTesterSummary: async () => otherVisibleThresholdSummary,
+    },
+    derivClientFactory: () => { throw new Error("Deriv client should not be used by backtest workflow check."); },
+    strategyEvaluator: async () => ({ mode: "DRY_RUN" }),
+  });
+  const otherVisibleThresholdWorkflow = await otherVisibleThresholdTools.call("tv_backtest_workflow_check", {
+    symbol: "VOLATILITY_75",
+    timeframe: "15",
+    strategyName: "Breakout Retest V1",
+  });
+  eq("backtest workflow check rejects other low visible thresholds", otherVisibleThresholdWorkflow.ok, false);
+  truthy("backtest workflow check reports low visible win rate blocker", otherVisibleThresholdWorkflow.blockers.some(item => /win rate/i.test(item) && /45/.test(item)));
+  truthy("backtest workflow check reports high visible drawdown blocker", otherVisibleThresholdWorkflow.blockers.some(item => /drawdown/i.test(item) && /15/.test(item)));
+  truthy("backtest workflow check reports low visible trade count blocker", otherVisibleThresholdWorkflow.blockers.some(item => /trade count/i.test(item) && /50/.test(item)));
+  eq("backtest workflow check reports visible win rate value", otherVisibleThresholdWorkflow.metricBlockers?.find(item => item.metric === "winRate")?.actual, 0.42);
+  eq("backtest workflow check reports visible drawdown value", otherVisibleThresholdWorkflow.metricBlockers?.find(item => item.metric === "maxDrawdown")?.actual, 0.16);
+  eq("backtest workflow check reports visible trade count value", otherVisibleThresholdWorkflow.metricBlockers?.find(item => item.metric === "totalTrades")?.actual, 49);
 
   const cleanupFailureTools = createCodexTools({
     allowLiveTrading: false,
