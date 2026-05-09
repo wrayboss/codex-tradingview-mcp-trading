@@ -2,6 +2,7 @@
 import { integrationTests } from "./integration.js";
 import { backtestValidatorTests } from "./backtestValidator.js";
 import { gitRemotePreflightTests } from "./gitRemotePreflight.js";
+import { presentationWorkbookTests } from "./presentationWorkbook.js";
 import { emaSeries, rsiSeries, atrSeries, smaSeries, pivotHighAt, pivotLowAt } from "../src/indicators.js";
 import { filterInProgress } from "../src/candleUtils.js";
 import { existsSync, unlinkSync, readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "fs";
@@ -1558,6 +1559,21 @@ await group("integration — cycle guards", async () => {
 
 await group("backtest validator", async () => {
   for (const t of backtestValidatorTests) {
+    try {
+      await t.run(
+        (label, actual, expected) => eq(`${t.name} | ${label}`, actual, expected),
+        (label, actual)           => truthy(`${t.name} | ${label}`, actual)
+      );
+    } catch (err) {
+      fail++;
+      failures.push({ label: t.name, actual: err.message, expected: "no error" });
+      console.log(`  FAIL ${t.name} - threw: ${err.message}`);
+    }
+  }
+});
+
+await group("presentation workbook", async () => {
+  for (const t of presentationWorkbookTests) {
     try {
       await t.run(
         (label, actual, expected) => eq(`${t.name} | ${label}`, actual, expected),

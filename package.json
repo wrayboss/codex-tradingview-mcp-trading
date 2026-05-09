@@ -17,6 +17,7 @@
     "codex:check": "node codex-mcp/server.js --self-test",
     "research:symbols": "node scripts/research-symbols.js",
     "research:candles": "node scripts/research-candles.js",
+    "presentation:workbook": "node scripts/build-presentation-workbook.js",
     "test": "node tests/run-tests.js",
     "git:preflight": "node scripts/git-remote-preflight.js",
     "launch": "powershell -ExecutionPolicy Bypass -File launch.ps1",
