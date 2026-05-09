@@ -229,6 +229,7 @@ npm run validate-backtest R_75-export.csv R_50-export.csv
 
 The validator checks all 7 go-live gates and writes `state/backtest-approved.json`.
 Gates 1-6 produce `demoApproved: true` for demo non-dry-run validation. Gates 1-7 produce `realApproved: true` for real-money validation. Real trading also requires `ALLOW_REAL_TRADING=true` and `DERIV_ALLOWED_REAL_LOGINID` to exactly match the authorized real account. The bot rejects missing, invalid, or stale approval records before any non-dry-run order path.
+The Codex `tv_backtest_workflow_check` reads the visible Strategy Tester summary before export and fails closed when visible metrics are below these same approval thresholds. It reports a structured metric blocker when visible Profit factor is below `1.6`, even if Total trades is nonzero.
 
 ### Go-Live Gates
 

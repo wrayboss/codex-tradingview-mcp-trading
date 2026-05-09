@@ -1160,6 +1160,34 @@ await group("codex mcp bridge", async () => {
   eq("backtest workflow check rejects invalid Strategy Tester data", invalidWorkflow.ok, false);
   truthy("backtest workflow check reports invalid data blocker", invalidWorkflow.blockers.some(item => /invalid data/i.test(item)));
 
+  const lowProfitFactorSummary = parseStrategyTesterSummaryText("Strategy Report Breakout Retest V1 Total P&L -25 USD -0.25% Max equity drawdown 400 USD 4.00% Total trades 64 Profitable trades 42.19% Profit factor 0.933");
+  const lowProfitFactorTools = createCodexTools({
+    allowLiveTrading: false,
+    externalTradingViewTools: [],
+    tvClient: {
+      setChart: async (args) => ({ symbol: args.symbol, timeframe: args.timeframe }),
+      cleanChartStudies: async () => ({ cleaned: true, after: [{ name: "RSI", title: "Relative Strength Index" }] }),
+      attachSavedPineStrategy: async (args) => ({
+        attached: true,
+        name: args.name,
+        strategyTester: lowProfitFactorSummary,
+      }),
+      readStrategyTesterSummary: async () => lowProfitFactorSummary,
+    },
+    derivClientFactory: () => { throw new Error("Deriv client should not be used by backtest workflow check."); },
+    strategyEvaluator: async () => ({ mode: "DRY_RUN" }),
+  });
+  const lowProfitFactorWorkflow = await lowProfitFactorTools.call("tv_backtest_workflow_check", {
+    symbol: "VOLATILITY_75",
+    timeframe: "15",
+    strategyName: "Breakout Retest V1",
+  });
+  eq("backtest workflow check rejects low visible profit factor", lowProfitFactorWorkflow.ok, false);
+  truthy("backtest workflow check reports low profit factor blocker", lowProfitFactorWorkflow.blockers.some(item => /profit factor/i.test(item) && /1\.6/.test(item)));
+  eq("backtest workflow check reports profit factor metric blocker", lowProfitFactorWorkflow.metricBlockers?.[0]?.metric, "profitFactor");
+  eq("backtest workflow check reports visible profit factor value", lowProfitFactorWorkflow.metricBlockers?.[0]?.actual, 0.933);
+  eq("backtest workflow check reports profit factor threshold", lowProfitFactorWorkflow.metricBlockers?.[0]?.threshold, 1.6);
+
   const cleanupFailureTools = createCodexTools({
     allowLiveTrading: false,
     externalTradingViewTools: [],

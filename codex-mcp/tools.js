@@ -32,6 +32,7 @@ import {
 } from "../src/tradingJarvis.js";
 import { buildRuntimeHealthReport } from "../src/runtimeHealth.js";
 import { validateDerivTradeSize } from "../src/tradeConstraints.js";
+import { DEFAULT_GATES } from "../scripts/validate-backtest.js";
 
 export { normalizeSyntheticSymbol };
 
@@ -72,6 +73,34 @@ export function parseStrategyTesterSummaryText(text = "") {
   if (profitFactor) summary.metrics.profitFactor = profitFactor[1];
 
   return summary;
+}
+
+function parseVisibleStrategyTesterNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/,/g, "").trim();
+  if (!normalized || normalized === "-" || normalized === "—" || /^n\/a$/i.test(normalized)) return null;
+  const numeric = Number(normalized);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+export function buildStrategyTesterMetricBlockers(summary = {}, gates = DEFAULT_GATES) {
+  const metrics = summary?.metrics || {};
+  const metricBlockers = [];
+  const profitFactor = parseVisibleStrategyTesterNumber(metrics.profitFactor);
+  if (profitFactor !== null && profitFactor < gates.minProfitFactor) {
+    metricBlockers.push({
+      metric: "profitFactor",
+      gate: 3,
+      label: "Profit factor",
+      actual: profitFactor,
+      threshold: gates.minProfitFactor,
+      comparator: ">=",
+      source: "visible_strategy_tester_summary",
+      detail: `Profit factor ${profitFactor} is below approval threshold ${gates.minProfitFactor}.`,
+    });
+  }
+  return metricBlockers;
 }
 
 export function buildSavedPineStrategyAttachmentResult({
@@ -1207,9 +1236,14 @@ export function createCodexTools({
       if (!summary.hasSummary) blockers.push("Strategy Tester summary metrics were not visible/readable.");
       if (summary.invalidData) blockers.push("Strategy Tester reported INVALID DATA.");
       if (summary.metrics?.totalTrades === 0) blockers.push("Strategy Tester reported zero total trades.");
+      const metricBlockers = buildStrategyTesterMetricBlockers(summary);
+      for (const blocker of metricBlockers) {
+        blockers.push(`Strategy Tester ${blocker.detail}`);
+      }
       return {
         ok: blockers.length === 0,
         blockers,
+        metricBlockers,
         stepTimeoutMs,
         chart,
         cleanup,
