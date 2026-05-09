@@ -84,17 +84,20 @@ function parseVisibleStrategyTesterNumber(value) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function parseVisibleStrategyTesterPercentRatio(value) {
+function parseVisibleStrategyTesterPercentRatio(value, { allowWholeNumberPercent = true } = {}) {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return null;
+    if (!allowWholeNumberPercent && Math.abs(value) > 1) return null;
     return Math.abs(value) > 1 ? value / 100 : value;
   }
   if (typeof value !== "string") return null;
   const normalized = value.replace(/,/g, "").trim();
   if (!normalized || normalized === "-" || normalized === "—" || /^n\/a$/i.test(normalized)) return null;
+  const hasPercentSign = normalized.endsWith("%");
   const numeric = Number(normalized.replace(/%$/, ""));
   if (!Number.isFinite(numeric)) return null;
-  return normalized.endsWith("%") || Math.abs(numeric) > 1 ? numeric / 100 : numeric;
+  if (!allowWholeNumberPercent && !hasPercentSign && Math.abs(numeric) > 1) return null;
+  return hasPercentSign || Math.abs(numeric) > 1 ? numeric / 100 : numeric;
 }
 
 function formatVisibleStrategyTesterPercent(ratio) {
@@ -152,9 +155,12 @@ export function buildStrategyTesterMetricBlockers(summary = {}, gates = DEFAULT_
     });
   }
 
-  const maxDrawdown = parseVisibleStrategyTesterPercentRatio(
-    metrics.maxDrawdownPct ?? metrics.maxDrawdown ?? metrics.maxEquityDrawdownPercent,
+  let maxDrawdown = parseVisibleStrategyTesterPercentRatio(
+    metrics.maxDrawdownPct ?? metrics.maxDrawdownPercent ?? metrics.maxEquityDrawdownPercent,
   );
+  if (maxDrawdown === null) {
+    maxDrawdown = parseVisibleStrategyTesterPercentRatio(metrics.maxDrawdown, { allowWholeNumberPercent: false });
+  }
   if (maxDrawdown !== null && maxDrawdown > gates.maxDrawdownPct) {
     pushStrategyTesterMetricBlocker(metricBlockers, {
       metric: "maxDrawdown",

@@ -856,6 +856,10 @@ await group("TradingView Strategy Tester parsing", () => {
   eq("strategy tester visible threshold blockers include win rate", thresholdBlockers.find(item => item.metric === "winRate")?.threshold, 0.45);
   eq("strategy tester visible threshold blockers include max drawdown", thresholdBlockers.find(item => item.metric === "maxDrawdown")?.threshold, 0.15);
   eq("strategy tester visible threshold blockers include trade count", thresholdBlockers.find(item => item.metric === "totalTrades")?.threshold, 50);
+  const ambiguousDrawdownBlockers = buildStrategyTesterMetricBlockers({ metrics: { totalTrades: 100, winRate: 0.5, profitFactor: 2, maxDrawdown: 1600 } });
+  eq("strategy tester drawdown gate ignores ambiguous raw drawdown amount", ambiguousDrawdownBlockers.some(item => item.metric === "maxDrawdown"), false);
+  const percentDrawdownBlockers = buildStrategyTesterMetricBlockers({ metrics: { totalTrades: 100, winRate: 0.5, profitFactor: 2, maxDrawdown: "16%" } });
+  eq("strategy tester drawdown gate accepts explicit maxDrawdown percent string", percentDrawdownBlockers.find(item => item.metric === "maxDrawdown")?.actual, 0.16);
 
   const exactAttach = buildSavedPineStrategyAttachmentResult({
     name: "Breakout Retest V1",
