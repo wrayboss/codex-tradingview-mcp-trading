@@ -1,17 +1,17 @@
 # TradingView / Deriv Runbook
 
-Repo path: `C:\Users\NewAdmin\claude-tradingview-mcp-trading`
+Repo path: current clone root. Verify with `git rev-parse --show-toplevel`.
 
 ## Start Here
 
-1. Read `C:\Users\NewAdmin\claude-tradingview-mcp-trading\AGENTS.md`.
+1. Read the repo-local `AGENTS.md`.
 2. Run `git status --short --branch`.
 3. Confirm whether the task is read-only, implementation, review, chart work, backtest validation, or live/demo trading.
 4. Do not run live/demo execution unless the user explicitly asks in the current conversation and the repo gates are verified.
 
 ## Current Observed State
 
-Observed on local machine at `2026-05-04 21:29:25 -05:00`:
+Historical Windows snapshot from `2026-05-04 21:29:25 -05:00`:
 
 ```text
 ## main...origin/main

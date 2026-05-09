@@ -1,6 +1,6 @@
 # PovertyKillerEA
 
-Repo path: `C:\Users\NewAdmin\Documents\GitHub\PovertyKillerEA`
+Repo path: current `PovertyKillerEA` clone. Verify with `git rev-parse --show-toplevel`.
 
 ## Working Rule
 

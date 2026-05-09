@@ -1,6 +1,6 @@
 # TradingView / Deriv Repo
 
-Repo path: `C:\Users\NewAdmin\claude-tradingview-mcp-trading`
+Repo path: current `claude-tradingview-mcp-trading` clone. Verify with `git rev-parse --show-toplevel`.
 
 ## Working Rule
 

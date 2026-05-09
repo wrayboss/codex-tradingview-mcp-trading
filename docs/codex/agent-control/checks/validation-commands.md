@@ -1,13 +1,13 @@
 # Validation Commands
 
-Run commands from the repo root shown in each section. Refresh status first.
+Run commands from the target repo root. Refresh status first.
 
 ## PovertyKillerEA
 
 Root:
 
-```powershell
-cd C:\Users\NewAdmin\Documents\GitHub\PovertyKillerEA
+```bash
+cd /path/to/PovertyKillerEA
 git status --short --branch
 ```
 
@@ -35,8 +35,8 @@ Use browser checks only after the terminal shows the actual local URL and the ap
 
 Root:
 
-```powershell
-cd C:\Users\NewAdmin\claude-tradingview-mcp-trading
+```bash
+cd /path/to/claude-tradingview-mcp-trading
 git status --short --branch
 ```
 

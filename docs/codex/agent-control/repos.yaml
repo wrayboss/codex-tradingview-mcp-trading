@@ -1,12 +1,14 @@
-version: 1
-observed_at_local: "2026-05-04 21:29:25 -05:00"
-observed_from: "C:\\Users\\NewAdmin\\Documents\\Codex\\2026-05-04\\research-on-docs-from-cloudflare-and"
+version: 2
+portable: true
+observed_at_local: "refresh-after-clone"
+observed_from: "repo-local docs/codex portable copy"
 
 repos:
   povertykillerea:
     name: "PovertyKillerEA"
-    path: "C:\\Users\\NewAdmin\\Documents\\GitHub\\PovertyKillerEA"
-    git_root: "C:/Users/NewAdmin/Documents/GitHub/PovertyKillerEA"
+    path: "<set-on-vps>/PovertyKillerEA"
+    git_root: "<set-on-vps>/PovertyKillerEA"
+    windows_reference_path: "C:\\Users\\NewAdmin\\Documents\\GitHub\\PovertyKillerEA"
     primary_remote:
       name: "origin"
       url: "https://github.com/wrayboss/PovertyKillerEA.git"
@@ -49,8 +51,9 @@ repos:
 
   tradingview_deriv:
     name: "claude-tradingview-mcp-trading"
-    path: "C:\\Users\\NewAdmin\\claude-tradingview-mcp-trading"
-    git_root: "C:/Users/NewAdmin/claude-tradingview-mcp-trading"
+    path: "<set-on-vps>/claude-tradingview-mcp-trading"
+    git_root: "<set-on-vps>/claude-tradingview-mcp-trading"
+    windows_reference_path: "C:\\Users\\NewAdmin\\claude-tradingview-mcp-trading"
     primary_remotes:
       - name: "origin"
         url: "https://github.com/wrayboss/claude-tradingview-mcp-trading.git"

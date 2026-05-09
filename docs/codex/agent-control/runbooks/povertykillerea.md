@@ -1,17 +1,17 @@
 # PovertyKillerEA Runbook
 
-Repo path: `C:\Users\NewAdmin\Documents\GitHub\PovertyKillerEA`
+Repo path: current clone root. Verify with `git rev-parse --show-toplevel`.
 
 ## Start Here
 
-1. Read `C:\Users\NewAdmin\Documents\GitHub\PovertyKillerEA\AGENTS.md`.
+1. Read the repo-local `AGENTS.md`.
 2. Run `git status --short --branch`.
 3. Confirm whether the task is read-only, implementation, review, cleanup, or PR maintenance.
 4. For implementation, create/use an isolated worktree or feature branch from `origin/main`. Do not work on local `main`.
 
 ## Current Observed State
 
-Observed on local machine at `2026-05-04 21:29:25 -05:00`:
+Historical Windows snapshot from `2026-05-04 21:29:25 -05:00`:
 
 ```text
 ## main...origin/main
@@ -47,7 +47,7 @@ Read-only audit:
 Implementation:
 
 - Start from `origin/main`.
-- Use a separate worktree under `C:\Users\NewAdmin\.config\superpowers\worktrees\PovertyKillerEA\` or another explicit feature worktree path.
+- Use a separate worktree outside the primary checkout, such as `$HOME/.codex/worktrees/PovertyKillerEA/<branch-name>`.
 - Keep the PR one-purpose.
 - Push a branch and open a PR into `main`.
 - Do not merge the PR.
