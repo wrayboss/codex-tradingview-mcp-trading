@@ -603,7 +603,8 @@ await group("Codex Autonomy Lab", () => {
   truthy("candidate generator includes no execution approval", candidates.every(candidate => candidate.executionApproved === false));
   const researchCandidate = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v1");
   truthy("candidate generator includes tuned V75 research candidate", researchCandidate);
-  eq("tuned research candidate uses EMA 144", researchCandidate.params.emaPeriod, 144);
+  eq("tuned research candidate uses EMA 200", researchCandidate.params.emaPeriod, 200);
+  eq("tuned research candidate uses 3.5 ATR target", researchCandidate.params.takeProfitAtr, 3.5);
   eq("tuned research candidate stays unapproved", researchCandidate.evidence.executionApproved, false);
   const v50Candidates = generateStrategyCandidates({ symbol: "VOLATILITY_50" });
   eq("V75 evidence is not attached to V50 candidates", v50Candidates.some(candidate => candidate.id.endsWith("ema-rsi-momentum-research-v1")), false);
@@ -831,6 +832,8 @@ await group("Pine strategy source", () => {
   truthy("research Pine uses tuned title", researchSource.includes("V75 EMA RSI Momentum Research V1"));
   eq("research Pine avoids inert alertcondition calls", /\balertcondition\s*\(/.test(researchSource), false);
   eq("research Pine keeps EMA plot disabled by default", researchSource.includes('input.bool(false, "Plot EMA"'), true);
+  truthy("research Pine defaults to EMA 200", /emaLen\s*=\s*input\.int\(200,/.test(researchSource));
+  truthy("research Pine defaults to 3.5 ATR target", /takeProfitAtr\s*=\s*input\.float\(3\.5,/.test(researchSource));
   truthy("research Pine uses fixed sizing for TradingView synthetic backtests", /default_qty_type\s*=\s*strategy\.fixed/.test(researchSource));
   truthy("research Pine has enough backtest capital for V75 fixed-unit orders", /initial_capital\s*=\s*100000/.test(researchSource));
 });

@@ -16,7 +16,7 @@ strategy("V75 EMA RSI Momentum Research V1",
 // TradingView strategy sizing is for synthetic-index backtest validity only.
 // Deriv execution stake and risk stay controlled by rules.json and local env gates.
 gS = "Signal"
-emaLen      = input.int(144, "EMA Period", minval=1, group=gS)
+emaLen      = input.int(200, "EMA Period", minval=1, group=gS)
 rsiLen      = input.int(14, "RSI Period", minval=1, group=gS)
 rsiLongMin  = input.float(62, "RSI Long Min", step=0.5, group=gS)
 rsiShortMax = input.float(38, "RSI Short Max", step=0.5, group=gS)
@@ -25,7 +25,7 @@ gR = "Risk"
 atrLen        = input.int(14, "ATR Period", minval=1, group=gR)
 holdBars      = input.int(8, "Time Exit Bars", minval=1, group=gR)
 stopAtr       = input.float(2.0, "Stop ATR", step=0.1, group=gR)
-takeProfitAtr = input.float(3.0, "Target ATR", step=0.1, group=gR)
+takeProfitAtr = input.float(3.5, "Target ATR", step=0.1, group=gR)
 
 gV = "Visuals"
 showEma = input.bool(false, "Plot EMA", group=gV)

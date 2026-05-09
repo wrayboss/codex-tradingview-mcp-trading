@@ -52,9 +52,10 @@ npm run codex:autonomy -- backtest --file state/research/candles/VOLATILITY_75-9
 
 Measured against `VOLATILITY_75` 15m Deriv candles, 5000 bars, split 3500 train / 1500 test:
 
-- Params: EMA 144, RSI 14, long RSI >= 62, short RSI <= 38, 8-bar time exit, 2 ATR stop, 3 ATR target.
-- Train: 211 trades, 56.40% win rate, 1.34 profit factor, +8904.75 points, 2930.28 max drawdown points.
-- Test: 77 trades, 57.14% win rate, 2.06 profit factor, +7505.44 points, 958.76 max drawdown points.
+- Params: EMA 200, RSI 14, long RSI >= 62, short RSI <= 38, 8-bar time exit, 2 ATR stop, 3.5 ATR target.
+- Full local run: 272 trades, 56.62% win rate, 1.53 profit factor, +16190.55 points, 4064.28 max drawdown points.
+- Train: 194 trades, 57.22% win rate, 1.40 profit factor, +8871.89 points, 4064.28 max drawdown points.
+- Test: 72 trades, 56.94% win rate, 1.99 profit factor, +7352.09 points, 968.63 max drawdown points.
 
 This local result is candidate evidence only. It is not a money-ready approval and it must still pass TradingView Strategy Tester export validation through `npm run validate-backtest <csv...>` before demo or live promotion.
 
