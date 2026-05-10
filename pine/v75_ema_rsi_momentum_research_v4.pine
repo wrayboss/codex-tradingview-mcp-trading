@@ -1,0 +1,70 @@
+//@version=6
+strategy("V75 EMA RSI Momentum Research V4",
+     overlay                 = true,
+     initial_capital         = 100000,
+     default_qty_type        = strategy.fixed,
+     default_qty_value       = 1,
+     margin_long             = 1,
+     margin_short             = 1,
+     commission_type         = strategy.commission.percent,
+     commission_value        = 0.05,
+     pyramiding              = 0,
+     calc_on_every_tick      = false,
+     process_orders_on_close = true)
+
+// Research-only candidate. It is not execution approved until TradingView exports pass validate-backtest.
+// TradingView strategy sizing is for synthetic-index backtest validity only.
+// Deriv execution stake and risk stay controlled by rules.json and local env gates.
+// Local evidence (5000 bars, 3500/1500 split, recent 1000-bar holdout): full 293 trades, PF 1.32, +12649.02 pts, max DD 5455.93.
+
+// ============ INPUTS ============
+emaLen      = input.int(100, "EMA Period", minval=1, group="Signal")
+rsiLen      = input.int(14, "RSI Period", minval=1, group="Signal")
+rsiLongMin  = input.float(60, "RSI Long Min", step=0.5, group="Signal")
+rsiShortMax = input.float(38, "RSI Short Max", step=0.5, group="Signal")
+
+atrLen        = input.int(14, "ATR Period", minval=1, group="Risk")
+holdBars      = input.int(10, "Time Exit Bars", minval=1, group="Risk")
+stopAtr       = input.float(2.0, "Stop ATR", step=0.1, group="Risk")
+takeProfitAtr = input.float(3.0, "Target ATR", step=0.1, group="Risk")
+
+showEma = input.bool(false, "Plot EMA", group="Visuals")
+
+emaVal = ta.ema(close, emaLen)
+rsiVal = ta.rsi(close, rsiLen)
+atrVal = ta.atr(atrLen)
+
+longSignal = close > emaVal and rsiVal >= rsiLongMin
+shortSignal = close < emaVal and rsiVal <= rsiShortMax
+
+var float entryAtr = na
+var int entryBar = na
+
+if strategy.position_size == 0
+    entryAtr := na
+    entryBar := na
+
+if strategy.position_size == 0 and longSignal
+    entryAtr := atrVal
+    entryBar := bar_index
+    strategy.entry("L", strategy.long)
+
+if strategy.position_size == 0 and shortSignal
+    entryAtr := atrVal
+    entryBar := bar_index
+    strategy.entry("S", strategy.short)
+
+if strategy.position_size > 0 and not na(entryAtr)
+    longStop = strategy.position_avg_price - stopAtr * entryAtr
+    longLimit = strategy.position_avg_price + takeProfitAtr * entryAtr
+    strategy.exit("L-X", from_entry="L", stop=longStop, limit=longLimit)
+
+if strategy.position_size < 0 and not na(entryAtr)
+    shortStop = strategy.position_avg_price + stopAtr * entryAtr
+    shortLimit = strategy.position_avg_price - takeProfitAtr * entryAtr
+    strategy.exit("S-X", from_entry="S", stop=shortStop, limit=shortLimit)
+
+if strategy.position_size != 0 and not na(entryBar) and bar_index - entryBar >= holdBars
+    strategy.close_all(comment="time")
+
+plot(showEma ? emaVal : na, "EMA", color=color.orange)

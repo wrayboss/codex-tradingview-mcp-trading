@@ -16,6 +16,7 @@ import {
 } from "../src/derivSymbolRegistry.js";
 import {
   backtestCandidateSet,
+  buildResearchMatrix,
   buildAutonomyPlan,
   buildAutonomyStatus,
   generateStrategyCandidates,
@@ -1565,6 +1566,54 @@ export function createCodexTools({
   );
 
   addTool(
+    "strategy_research_matrix",
+    textSchema(
+      "Run a broad research-only multi-symbol strategy matrix from inline candles or repo-local candle files. This never approves execution or places orders.",
+      {
+        symbolCandles: {
+          type: "object",
+          additionalProperties: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                epoch: { type: "number" },
+                open: { type: "number" },
+                high: { type: "number" },
+                low: { type: "number" },
+                close: { type: "number" },
+              },
+              required: ["open", "high", "low", "close"],
+              additionalProperties: true,
+            },
+          },
+        },
+        candleFiles: {
+          type: "object",
+          additionalProperties: { type: "string" },
+        },
+      },
+    ),
+    async (args) => {
+      const symbolCandles = {};
+      if (args.symbolCandles && typeof args.symbolCandles === "object") {
+        for (const [symbol, candles] of Object.entries(args.symbolCandles)) {
+          symbolCandles[symbol] = candles;
+        }
+      }
+      if (args.candleFiles && typeof args.candleFiles === "object") {
+        for (const [symbol, file] of Object.entries(args.candleFiles)) {
+          const payload = loadCandlePayload(file);
+          const resolvedSymbol = symbol || payload.symbol;
+          if (!resolvedSymbol) throw new Error(`No symbol provided for candle file ${file}.`);
+          symbolCandles[resolvedSymbol] = payload.candles;
+        }
+      }
+      return buildResearchMatrix({ symbolCandles });
+    },
+  );
+
+  addTool(
     "jarvis_command_center",
     textSchema(
       "Build a Trading Jarvis command-center snapshot from chart state, indicators, screenshot, and optional account metadata.",
@@ -1680,7 +1729,7 @@ export function createCodexTools({
       "Build a read-only operator comparison between the executable Breakout Retest strategy and the V75 EMA/RSI research Pine candidate.",
       {
         currentSummary: { type: "object", additionalProperties: true, description: "Optional parsed TradingView Strategy Tester summary for Breakout Retest V1." },
-        researchSummary: { type: "object", additionalProperties: true, description: "Optional parsed TradingView Strategy Tester summary for V75 EMA RSI Momentum Research V1." },
+        researchSummary: { type: "object", additionalProperties: true, description: "Optional parsed TradingView Strategy Tester summary for V75 EMA RSI Momentum Research V7." },
       },
     ),
     async (args) => buildStrategyCompareSurface({

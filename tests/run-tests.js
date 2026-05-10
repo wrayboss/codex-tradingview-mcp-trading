@@ -38,9 +38,12 @@ import {
   toTradingViewSymbol,
 } from "../src/derivSymbolRegistry.js";
 import {
+  backtestCandidate,
   backtestCandidateSet,
+  buildResearchMatrix,
   buildAutonomyPlan,
   buildAutonomyStatus,
+  evaluateCandidateRobustness,
   generateStrategyCandidates,
   loadCandlePayload,
   rankBacktestResults,
@@ -691,15 +694,62 @@ await group("Codex Autonomy Lab", () => {
   truthy("autonomy plan requires promotion gates before execution", plan.stopConditions.some(item => item.includes("validate-backtest")));
 
   const candidates = generateStrategyCandidates({ symbol: "VOLATILITY_75" });
-  truthy("candidate generator returns multiple ideas", candidates.length >= 3);
+  truthy("candidate generator returns multiple ideas", candidates.length >= 5);
   truthy("candidate generator includes no execution approval", candidates.every(candidate => candidate.executionApproved === false));
-  const researchCandidate = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v1");
-  truthy("candidate generator includes tuned V75 research candidate", researchCandidate);
-  eq("tuned research candidate uses EMA 200", researchCandidate.params.emaPeriod, 200);
-  eq("tuned research candidate uses 3.5 ATR target", researchCandidate.params.takeProfitAtr, 3.5);
-  eq("tuned research candidate stays unapproved", researchCandidate.evidence.executionApproved, false);
+  truthy("candidate generator includes V75 compression break retest family", candidates.some(candidate => candidate.family === "compression_break_retest_continuation"));
+  const researchCandidateV7 = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v7");
+  truthy("candidate generator includes tuned V75 research V7 candidate", researchCandidateV7);
+  eq("tuned V75 research candidate uses EMA 175", researchCandidateV7.params.emaPeriod, 175);
+  eq("tuned V75 research candidate uses 8-bar hold", researchCandidateV7.params.holdBars, 8);
+  eq("tuned V75 research candidate uses 2.5 ATR stop", researchCandidateV7.params.stopAtr, 2.5);
+  eq("tuned V75 research candidate uses 3.5 ATR target", researchCandidateV7.params.takeProfitAtr, 3.5);
+  eq("tuned V75 research candidate stays unapproved", researchCandidateV7.evidence.executionApproved, false);
+  const researchCandidateV6 = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v6");
+  truthy("candidate generator keeps tuned V75 research V6 historical candidate", researchCandidateV6);
+  eq("historical V75 V6 uses EMA 225", researchCandidateV6.params.emaPeriod, 225);
+  eq("historical V75 V6 uses 10-bar hold", researchCandidateV6.params.holdBars, 10);
+  eq("historical V75 V6 uses 2.5 ATR target", researchCandidateV6.params.takeProfitAtr, 2.5);
+  eq("historical V75 V6 stays unapproved", researchCandidateV6.evidence.executionApproved, false);
+  const researchCandidateV5 = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v5");
+  truthy("candidate generator keeps tuned V75 research V5 historical candidate", researchCandidateV5);
+  eq("TradingView evidence keeps V75 V5 unapproved", researchCandidateV5.evidence.tradingView.approved, false);
+  eq("TradingView evidence records V75 V5 failed profit factor", researchCandidateV5.evidence.tradingView.metrics.profitFactor, 0.865);
+  const researchCandidateV2 = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v2");
+  truthy("candidate generator includes tuned V75 research V2 candidate", researchCandidateV2);
+  eq("tuned V75 research V2 uses EMA 100", researchCandidateV2.params.emaPeriod, 100);
+  eq("tuned V75 research V2 uses 2.5 ATR target", researchCandidateV2.params.takeProfitAtr, 2.5);
+  eq("tuned V75 research V2 stays unapproved", researchCandidateV2.evidence.executionApproved, false);
+  const researchCandidateV1 = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v1");
+  truthy("candidate generator still includes tuned V75 research baseline", researchCandidateV1);
+  const researchCandidateV4 = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v4");
+  eq("TradingView evidence keeps V75 V4 unapproved", researchCandidateV4.evidence.tradingView.approved, false);
+  eq("TradingView evidence records V75 V4 failed profit factor", researchCandidateV4.evidence.tradingView.metrics.profitFactor, 0.905);
   const v50Candidates = generateStrategyCandidates({ symbol: "VOLATILITY_50" });
-  eq("V75 evidence is not attached to V50 candidates", v50Candidates.some(candidate => candidate.id.endsWith("ema-rsi-momentum-research-v1")), false);
+  truthy("candidate generator includes tuned V50 mean reversion candidate", v50Candidates.find(candidate => candidate.id === "VOLATILITY_50-rsi-mean-reversion-research-v2"));
+  eq("V75 evidence is not attached to V50 candidates", v50Candidates.some(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v2"), false);
+  const crashCandidates = generateStrategyCandidates({ symbol: "CRASH_500" });
+  truthy("candidate generator includes Crash/Boom spike fade family", crashCandidates.some(candidate => candidate.family === "spike_fade"));
+  truthy("candidate generator includes Crash/Boom cooldown family", crashCandidates.some(candidate => candidate.family === "post_spike_cooldown"));
+  eq("Crash candidates remain execution-ineligible", crashCandidates.every(candidate => candidate.executionEligible === false && candidate.executionApproved === false), true);
+  const jumpCandidates = generateStrategyCandidates({ symbol: "JUMP_75" });
+  truthy("candidate generator includes Jump impulse family", jumpCandidates.some(candidate => candidate.family === "jump_impulse_continuation"));
+  truthy("candidate generator includes Jump mean reversion family", jumpCandidates.some(candidate => candidate.family === "post_jump_mean_reversion"));
+  const stepCandidates = generateStrategyCandidates({ symbol: "STEP_300" });
+  truthy("candidate generator includes Step short-trend family", stepCandidates.some(candidate => candidate.family === "step_short_trend"));
+  const volatility100Candidates = generateStrategyCandidates({ symbol: "VOLATILITY_100" });
+  truthy("candidate generator includes Volatility compression breakout family", volatility100Candidates.some(candidate => candidate.family === "atr_compression_breakout"));
+  truthy("candidate generator includes compression break retest family", volatility100Candidates.some(candidate => candidate.family === "compression_break_retest_continuation"));
+  truthy("candidate generator includes structure V2 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-structure-v2")));
+  truthy("candidate generator includes conservative V2 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-conservative-v2")));
+  truthy("candidate generator includes depth V2 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-depth-v2")));
+  truthy("candidate generator includes V100 short-only V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-short-v3")));
+  truthy("candidate generator includes V100 trend-filtered V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-short-trend-v3")));
+  truthy("candidate generator includes V100 ATR-regime V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-regime-v3")));
+  truthy("candidate generator includes V100 confirmation-body V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-body-v3")));
+  const v100ShortTrend = volatility100Candidates.find(candidate => candidate.id.endsWith("compression-break-retest-short-trend-v3"));
+  eq("V100 short-trend TradingView evidence stays rejected", v100ShortTrend.evidence.tradingView.approved, false);
+  eq("V100 short-trend TradingView evidence records failed profit factor", v100ShortTrend.evidence.tradingView.metrics.profitFactor, 1.234);
+  eq("V100 short-trend evidence keeps execution unapproved", v100ShortTrend.evidence.executionApproved, false);
 
   const candles = Array.from({ length: 90 }, (_, i) => ({
     epoch: 1000 + i * 900,
@@ -714,11 +764,197 @@ await group("Codex Autonomy Lab", () => {
   const ranked = rankBacktestResults(results);
   truthy("ranker sorts best score first", ranked[0].score >= ranked.at(-1).score);
 
+  const compressionBreakRetestCandles = Array.from({ length: 80 }, (_, i) => {
+    const base = 100 + i * 0.02;
+    return {
+      epoch: 3000 + i * 900,
+      open: base,
+      high: base + 0.35,
+      low: base - 0.35,
+      close: base + 0.04,
+    };
+  });
+  for (let i = 24; i < 48; i++) {
+    compressionBreakRetestCandles[i] = {
+      epoch: 3000 + i * 900,
+      open: 101 + Math.sin(i) * 0.05,
+      high: 101.35,
+      low: 100.65,
+      close: 101 + Math.cos(i) * 0.05,
+    };
+  }
+  compressionBreakRetestCandles[48] = { epoch: 3000 + 48 * 900, open: 101.1, high: 103.2, low: 101.0, close: 102.9 };
+  compressionBreakRetestCandles[49] = { epoch: 3000 + 49 * 900, open: 102.8, high: 103.0, low: 101.28, close: 101.72 };
+  compressionBreakRetestCandles[50] = { epoch: 3000 + 50 * 900, open: 101.7, high: 102.55, low: 101.3, close: 102.4 };
+  compressionBreakRetestCandles[51] = { epoch: 3000 + 51 * 900, open: 102.45, high: 104.2, low: 102.3, close: 103.8 };
+  const compressionBreakRetestCandidate = generateStrategyCandidates({ symbol: "VOLATILITY_100" })
+    .find(candidate => candidate.family === "compression_break_retest_continuation");
+  const compressionBreakRetestResult = backtestCandidate({
+    candles: compressionBreakRetestCandles,
+    candidate: compressionBreakRetestCandidate,
+  });
+  truthy("compression break retest model produces backtestable trades", compressionBreakRetestResult.metrics.trades > 0);
+
+  const delayedConfirmationCandles = compressionBreakRetestCandles.map(candle => ({ ...candle }));
+  delayedConfirmationCandles[50] = { epoch: 3000 + 50 * 900, open: 102.1, high: 102.85, low: 101.72, close: 102.65 };
+  const delayedConfirmationResult = backtestCandidate({
+    candles: delayedConfirmationCandles,
+    candidate: compressionBreakRetestCandidate,
+  });
+  truthy("compression break retest allows retest before confirmation candle", delayedConfirmationResult.metrics.trades > 0);
+
+  const compressionDepthCandidate = generateStrategyCandidates({ symbol: "VOLATILITY_100" })
+    .find(candidate => candidate.id.endsWith("compression-break-retest-depth-v2"));
+  const withCompressionParams = params => ({
+    ...compressionDepthCandidate,
+    params: { ...compressionDepthCandidate.params, ...params },
+  });
+
+  const shortCompressionBreakRetestCandles = Array.from({ length: 80 }, (_, i) => {
+    const base = 104 - i * 0.02;
+    return {
+      epoch: 4000 + i * 900,
+      open: base,
+      high: base + 0.35,
+      low: base - 0.35,
+      close: base - 0.04,
+    };
+  });
+  for (let i = 24; i < 48; i++) {
+    shortCompressionBreakRetestCandles[i] = {
+      epoch: 4000 + i * 900,
+      open: 101 + Math.sin(i) * 0.05,
+      high: 101.35,
+      low: 100.65,
+      close: 101 + Math.cos(i) * 0.05,
+    };
+  }
+  shortCompressionBreakRetestCandles[48] = { epoch: 4000 + 48 * 900, open: 100.9, high: 101.0, low: 98.8, close: 99.1 };
+  shortCompressionBreakRetestCandles[49] = { epoch: 4000 + 49 * 900, open: 99.2, high: 100.72, low: 99.0, close: 100.28 };
+  shortCompressionBreakRetestCandles[50] = { epoch: 4000 + 50 * 900, open: 100.25, high: 100.7, low: 99.2, close: 99.45 };
+  shortCompressionBreakRetestCandles[51] = { epoch: 4000 + 51 * 900, open: 99.4, high: 99.55, low: 97.6, close: 98.1 };
+  const shortFixtureResult = backtestCandidate({
+    candles: shortCompressionBreakRetestCandles,
+    candidate: compressionDepthCandidate,
+  });
+  truthy("compression break retest short fixture produces short trades", shortFixtureResult.metrics.trades > 0);
+
+  const shortOnlyOnLongFixture = backtestCandidate({
+    candles: compressionBreakRetestCandles,
+    candidate: withCompressionParams({ sideMode: "short_only" }),
+  });
+  eq("short-only compression candidate blocks long signals", shortOnlyOnLongFixture.metrics.trades, 0);
+  const longOnlyOnShortFixture = backtestCandidate({
+    candles: shortCompressionBreakRetestCandles,
+    candidate: withCompressionParams({ sideMode: "long_only" }),
+  });
+  eq("long-only compression candidate blocks short signals", longOnlyOnShortFixture.metrics.trades, 0);
+
+  const counterTrendLongCandles = compressionBreakRetestCandles.map((candle, index) => {
+    if (index >= 24) return { ...candle };
+    const close = 130 - index * 1.1;
+    return {
+      ...candle,
+      open: close + 0.25,
+      high: close + 0.8,
+      low: close - 0.8,
+      close,
+    };
+  });
+  const counterTrendUnfiltered = backtestCandidate({
+    candles: counterTrendLongCandles,
+    candidate: compressionDepthCandidate,
+  });
+  truthy("counter-trend fixture still has an unfiltered compression signal", counterTrendUnfiltered.metrics.trades > 0);
+  const trendBlocked = backtestCandidate({
+    candles: counterTrendLongCandles,
+    candidate: withCompressionParams({ trendEmaPeriod: 21, trendSlopeLookback: 5, minTrendSlopeAtr: 0.05 }),
+  });
+  eq("trend-filtered compression candidate blocks counter-trend signals", trendBlocked.metrics.trades, 0);
+
+  const lowAtrRegimeBlocked = backtestCandidate({
+    candles: compressionBreakRetestCandles,
+    candidate: withCompressionParams({ atrRegimeLookback: 20, minAtrRatio: 10 }),
+  });
+  eq("ATR regime filter blocks too-low ATR ratio", lowAtrRegimeBlocked.metrics.trades, 0);
+  const highAtrRegimeBlocked = backtestCandidate({
+    candles: compressionBreakRetestCandles,
+    candidate: withCompressionParams({ atrRegimeLookback: 20, maxAtrRatio: 0.01 }),
+  });
+  eq("ATR regime filter blocks too-high ATR ratio", highAtrRegimeBlocked.metrics.trades, 0);
+
+  const weakConfirmationCandles = compressionBreakRetestCandles.map(candle => ({ ...candle }));
+  weakConfirmationCandles[50] = { epoch: 3000 + 50 * 900, open: 102.39, high: 102.55, low: 101.3, close: 102.4 };
+  weakConfirmationCandles[51] = { epoch: 3000 + 51 * 900, open: 102.45, high: 104.2, low: 102.3, close: 102.46 };
+  const weakConfirmationUnfiltered = backtestCandidate({
+    candles: weakConfirmationCandles,
+    candidate: compressionDepthCandidate,
+  });
+  truthy("weak confirmation fixture still has an unfiltered compression signal", weakConfirmationUnfiltered.metrics.trades > 0);
+  const weakConfirmationBlocked = backtestCandidate({
+    candles: weakConfirmationCandles,
+    candidate: withCompressionParams({ minConfirmBodyAtr: 0.1 }),
+  });
+  eq("confirmation-body filter blocks weak confirmation candles", weakConfirmationBlocked.metrics.trades, 0);
+
+  const researchCandles = (seed, drift = 0.08) => Array.from({ length: 180 }, (_, i) => {
+    const pulse = i % 27 === 0 ? seed * 0.08 : 0;
+    const wave = Math.sin(i / 5) * seed * 0.01;
+    const base = seed + i * drift + wave + pulse;
+    const close = base + Math.sin(i / 3) * seed * 0.004;
+    return {
+      epoch: 2000 + i * 900,
+      open: base,
+      high: Math.max(base, close) + seed * 0.006,
+      low: Math.min(base, close) - seed * 0.006,
+      close,
+    };
+  });
+  const robust = evaluateCandidateRobustness({
+    candles: researchCandles(100),
+    candidate: generateStrategyCandidates({ symbol: "CRASH_500" }).find(candidate => candidate.family === "spike_fade"),
+  });
+  eq("candidate robustness keeps execution approval false", robust.executionApproved, false);
+  truthy("candidate robustness reports train test recent metrics", robust.splits.train.metrics && robust.splits.test.metrics && robust.splits.recent.metrics);
+  truthy("candidate robustness explains promotion or rejection", robust.status && robust.reasons.length > 0);
+
+  const matrix = buildResearchMatrix({
+    symbolCandles: {
+      CRASH_500: researchCandles(100, -0.02),
+      BOOM_500: researchCandles(120, 0.02),
+      JUMP_75: researchCandles(80, 0.04),
+      STEP_300: researchCandles(40, 0.01),
+      VOLATILITY_100: researchCandles(500, 0.2),
+    },
+  });
+  eq("research matrix stays research-only", matrix.mode, "research_only");
+  eq("research matrix disables trade execution", matrix.tradeExecutionAllowed, false);
+  eq("research matrix ranks top three symbols", matrix.shortlist.topSymbols.length, 3);
+  truthy("research matrix keeps all reported candidates unapproved", matrix.symbols.every(symbol => symbol.topFamilies.every(item => item.executionApproved === false)));
+  eq("research matrix keeps Crash execution-ineligible", matrix.symbols.find(item => item.symbol === "CRASH_500").executionEligible, false);
+  eq("research matrix gives top two families per symbol", matrix.symbols.every(item => item.topFamilies.length <= 2), true);
+  let emptyMatrixRejected = false;
+  try { buildResearchMatrix({ symbolCandles: {} }); }
+  catch { emptyMatrixRejected = true; }
+  truthy("research matrix rejects empty input clearly", emptyMatrixRejected);
+  truthy("research matrix candidate rows include split metrics", matrix.symbols.every(item => item.candidates.every(candidate =>
+    candidate.symbol &&
+    candidate.family &&
+    candidate.params &&
+    candidate.status &&
+    candidate.metrics.full &&
+    candidate.metrics.train &&
+    candidate.metrics.test &&
+    candidate.metrics.recent
+  )));
+
   const autonomyDir = "state-test-autonomy";
   try {
     rmSync(autonomyDir, { recursive: true, force: true });
     mkdirSync(autonomyDir, { recursive: true });
     writeFileSync(`${autonomyDir}/candles.json`, `\uFEFF${JSON.stringify({ candles })}`);
+    writeFileSync(`${autonomyDir}/crash.json`, JSON.stringify({ symbol: "CRASH_500", candles: researchCandles(100, -0.02) }));
+    writeFileSync(`${autonomyDir}/jump.json`, JSON.stringify({ symbol: "JUMP_75", candles: researchCandles(80, 0.04) }));
     eq("candle payload loader handles UTF-8 BOM", loadCandlePayload(`${autonomyDir}/candles.json`).candles.length, candles.length);
     const backtestCli = spawnSync(process.execPath, ["scripts/codex-autonomy.js", "backtest", "--file", `${autonomyDir}/candles.json`, "--json"], {
       encoding: "utf8",
@@ -728,6 +964,21 @@ await group("Codex Autonomy Lab", () => {
     const backtestOutput = JSON.parse(backtestCli.stdout);
     truthy("codex autonomy backtest CLI ranks candidates", backtestOutput.results.length >= 3);
     eq("codex autonomy backtest CLI stays research-only", backtestOutput.executionApproved, false);
+    const sweepCli = spawnSync(process.execPath, [
+      "scripts/codex-autonomy.js",
+      "sweep",
+      "--files",
+      `CRASH_500=${autonomyDir}/crash.json,JUMP_75=${autonomyDir}/jump.json`,
+      "--json",
+    ], {
+      encoding: "utf8",
+      shell: false,
+    });
+    eq("codex autonomy sweep CLI exits cleanly", sweepCli.status, 0);
+    const sweepOutput = JSON.parse(sweepCli.stdout);
+    eq("codex autonomy sweep CLI stays research-only", sweepOutput.mode, "research_only");
+    eq("codex autonomy sweep CLI keeps execution disabled", sweepOutput.tradeExecutionAllowed, false);
+    eq("codex autonomy sweep CLI keeps Crash execution-ineligible", sweepOutput.symbols.find(item => item.symbol === "CRASH_500").executionEligible, false);
   } finally {
     rmSync(autonomyDir, { recursive: true, force: true });
   }
@@ -791,6 +1042,7 @@ await group("Trading Jarvis command center", () => {
   const strategyBrief = buildStrategyBuilderBrief({ objective: "improve breakout filters", symbols: ["VOLATILITY_75", "CRASH_500"] });
   eq("strategy builder brief stays research-only", strategyBrief.mode, "research_only");
   truthy("strategy builder includes candidate generation", strategyBrief.steps.some(step => step.id === "generate_candidates"));
+  truthy("strategy builder includes multi-symbol matrix", strategyBrief.steps.some(step => step.id === "research_matrix"));
   truthy("strategy builder marks Crash research-only", strategyBrief.symbols.find(item => item.symbol === "CRASH_500").executionEligible === false);
 
   const backtestChecklist = buildBacktestOperatorChecklist({ symbols: ["VOLATILITY_75", "VOLATILITY_50"], pineFile: "pine/breakout_retest_v1.pine" });
@@ -940,15 +1192,42 @@ await group("Pine strategy source", () => {
   truthy("Pine strategy has enough backtest capital for V75 fixed-unit orders", /initial_capital\s*=\s*100000/.test(source));
   truthy("Pine strategy configures low margin for V75 fixed-unit backtests", /margin_long\s*=\s*1/.test(source) && /margin_short\s*=\s*1/.test(source));
 
-  const researchSource = readFileSync("pine/v75_ema_rsi_momentum_research_v1.pine", "utf8");
+  const researchSource = readFileSync("pine/v75_ema_rsi_momentum_research_v7.pine", "utf8");
   truthy("research Pine source is a strategy", /\bstrategy\s*\(/.test(researchSource));
-  truthy("research Pine uses tuned title", researchSource.includes("V75 EMA RSI Momentum Research V1"));
+  truthy("research Pine uses tuned title", researchSource.includes("V75 EMA RSI Momentum Research V7"));
   eq("research Pine avoids inert alertcondition calls", /\balertcondition\s*\(/.test(researchSource), false);
   eq("research Pine keeps EMA plot disabled by default", researchSource.includes('input.bool(false, "Plot EMA"'), true);
-  truthy("research Pine defaults to EMA 200", /emaLen\s*=\s*input\.int\(200,/.test(researchSource));
+  truthy("research Pine defaults to EMA 175", /emaLen\s*=\s*input\.int\(175,/.test(researchSource));
+  truthy("research Pine defaults to RSI long min 60", /rsiLongMin\s*=\s*input\.float\(60,/.test(researchSource));
+  truthy("research Pine defaults to 8-bar time exit", /holdBars\s*=\s*input\.int\(8,/.test(researchSource));
+  truthy("research Pine defaults to 2.5 ATR stop", /stopAtr\s*=\s*input\.float\(2\.5,/.test(researchSource));
   truthy("research Pine defaults to 3.5 ATR target", /takeProfitAtr\s*=\s*input\.float\(3\.5,/.test(researchSource));
   truthy("research Pine uses fixed sizing for TradingView synthetic backtests", /default_qty_type\s*=\s*strategy\.fixed/.test(researchSource));
   truthy("research Pine has enough backtest capital for V75 fixed-unit orders", /initial_capital\s*=\s*100000/.test(researchSource));
+
+  const compressionSource = readFileSync("pine/v100_compression_break_retest_depth_v2.pine", "utf8");
+  truthy("compression research Pine source is a strategy", /\bstrategy\s*\(/.test(compressionSource));
+  truthy("compression research Pine uses V100 title", compressionSource.includes("V100 Compression Break Retest Depth V2"));
+  eq("compression research Pine avoids inert alertcondition calls", /\balertcondition\s*\(/.test(compressionSource), false);
+  truthy("compression research Pine defaults to 18-bar box", /compressionLookback\s*=\s*input\.int\(18,/.test(compressionSource));
+  truthy("compression research Pine defaults to 8-bar retest", /retestBars\s*=\s*input\.int\(8,/.test(compressionSource));
+  truthy("compression research Pine defaults to 6-bar hold", /holdBars\s*=\s*input\.int\(6,/.test(compressionSource));
+  truthy("compression research Pine defaults to 1 ATR stop", /stopAtr\s*=\s*input\.float\(1\.0,/.test(compressionSource));
+  truthy("compression research Pine defaults to 2.4 ATR target", /takeProfitAtr\s*=\s*input\.float\(2\.4,/.test(compressionSource));
+  truthy("compression research Pine has local candle window start", compressionSource.includes('timestamp("26 Jan 2026 00:00 +0000")'));
+  truthy("compression research Pine has local candle window end", compressionSource.includes('timestamp("10 May 2026 03:45 +0000")'));
+  truthy("compression research Pine uses fixed sizing", /default_qty_type\s*=\s*strategy\.fixed/.test(compressionSource));
+  truthy("compression research Pine avoids same-bar opposite entries", /shortSignal\s+and\s+not\s+longSignal/.test(compressionSource));
+
+  const compressionV3Source = readFileSync("pine/v100_compression_break_retest_short_trend_v3.pine", "utf8");
+  truthy("compression V3 Pine source is a strategy", /\bstrategy\s*\(/.test(compressionV3Source));
+  truthy("compression V3 Pine uses short-trend title", compressionV3Source.includes("V100 Compression Break Retest Short Trend V3"));
+  eq("compression V3 Pine avoids inert alertcondition calls", /\balertcondition\s*\(/.test(compressionV3Source), false);
+  truthy("compression V3 Pine defaults to trend EMA 50", /trendEmaPeriod\s*=\s*input\.int\(50,/.test(compressionV3Source));
+  truthy("compression V3 Pine defaults to slope lookback 8", /trendSlopeLookback\s*=\s*input\.int\(8,/.test(compressionV3Source));
+  truthy("compression V3 Pine defaults to slope ATR 0.04", /minTrendSlopeAtr\s*=\s*input\.float\(0\.04,/.test(compressionV3Source));
+  truthy("compression V3 Pine is short-only", /\bstrategy\.entry\("S",\s*strategy\.short\)/.test(compressionV3Source));
+  eq("compression V3 Pine does not submit long entries", /\bstrategy\.long\b/.test(compressionV3Source), false);
 });
 
 await group("TradingView Strategy Tester parsing", () => {
@@ -988,7 +1267,7 @@ await group("TradingView Strategy Tester parsing", () => {
     name: "Breakout Retest V1",
     before: [{ name: "Relative Strength Index" }],
     after: [
-      { name: "V75 EMA RSI Momentum Research V1", title: "EMA Period", rowText: "V75 EMA RSI Momentum Research V1 144 14 62 38" },
+      { name: "V75 EMA RSI Momentum Research V7", title: "EMA Period", rowText: "V75 EMA RSI Momentum Research V7 175 14 60 38" },
       { name: "Relative Strength Index" },
     ],
     strategyTester: { hasSummary: true },
@@ -1181,6 +1460,7 @@ await group("codex mcp bridge", async () => {
   truthy("lists strategy autonomy status tool", names.includes("strategy_autonomy_status"));
   truthy("lists strategy autonomy plan tool", names.includes("strategy_autonomy_plan"));
   truthy("lists strategy candidate backtest tool", names.includes("strategy_candidate_backtest"));
+  truthy("lists strategy research matrix tool", names.includes("strategy_research_matrix"));
   truthy("lists Jarvis command center tool", names.includes("jarvis_command_center"));
   truthy("lists Jarvis analyze chart tool", names.includes("jarvis_analyze_chart"));
   truthy("lists Jarvis scan watchlist tool", names.includes("jarvis_scan_watchlist"));
@@ -1496,6 +1776,15 @@ await group("codex mcp bridge", async () => {
   const autonomyBacktest = await tools.call("strategy_candidate_backtest", { symbol: "VOLATILITY_75", candles: autonomyBacktestCandles });
   truthy("autonomy MCP backtest returns ranked candidates", autonomyBacktest.results.length >= 3);
   truthy("autonomy MCP backtest keeps results research-only", autonomyBacktest.results.every(result => result.executionApproved === false));
+  const autonomyMatrix = await tools.call("strategy_research_matrix", {
+    symbolCandles: {
+      CRASH_500: autonomyBacktestCandles,
+      JUMP_75: autonomyBacktestCandles,
+    },
+  });
+  eq("autonomy MCP matrix is research-only", autonomyMatrix.mode, "research_only");
+  eq("autonomy MCP matrix disables execution", autonomyMatrix.tradeExecutionAllowed, false);
+  eq("autonomy MCP matrix keeps Crash research-only", autonomyMatrix.symbols.find(item => item.symbol === "CRASH_500").executionEligible, false);
 
   const jarvisCenter = await tools.call("jarvis_command_center", { symbol: "VOLATILITY_75", timeframe: "15" });
   eq("Jarvis MCP command center returns symbol", jarvisCenter.chart.symbol, "VOLATILITY_75");
