@@ -26,7 +26,7 @@ Likely local targets:
 
 Always use the actual terminal output for the URL.
 
-## claude-tradingview-mcp-trading
+## codex-tradingview-mcp-trading
 
 Likely browser-relevant tasks:
 

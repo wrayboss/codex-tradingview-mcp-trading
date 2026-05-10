@@ -34,6 +34,14 @@ import {
 import { buildRuntimeHealthReport } from "../src/runtimeHealth.js";
 import { validateDerivTradeSize } from "../src/tradeConstraints.js";
 import { DEFAULT_GATES } from "../scripts/validate-backtest.js";
+import {
+  ALLOWED_DERIV_EA_BACKTEST_DRY_SYMBOLS,
+  getDerivEaDoctor,
+  getDerivEaStatus,
+  runDerivEaBacktestDry,
+  runDerivEaCheck,
+  runDerivEaQuickCheck,
+} from "../src/derivEaBridge.js";
 
 export { normalizeSyntheticSymbol };
 
@@ -1491,6 +1499,42 @@ export function createCodexTools({
     "strategy_evaluate_dry_run",
     textSchema("Run the existing strategy in dry-run mode. This never places orders."),
     async (args) => strategyEvaluator(args),
+  );
+
+  addTool(
+    "deriv_ea_status",
+    textSchema("Read-only status for the private deriv_ea MT5 engine at C:\\deriv_ea. This never runs live MT5 actions."),
+    async () => getDerivEaStatus(),
+  );
+
+  addTool(
+    "deriv_ea_doctor",
+    textSchema("Read-only doctor check for required deriv_ea operating files and known instruction mismatches."),
+    async () => getDerivEaDoctor(),
+  );
+
+  addTool(
+    "deriv_ea_check",
+    textSchema("Run the exact deriv_ea safe check sequence: secrets scan, then precommit. No live MT5 actions."),
+    async () => runDerivEaCheck(),
+  );
+
+  addTool(
+    "deriv_ea_quick_check",
+    textSchema("Run deriv_ea quick-check as a heavier explicit check. No live MT5 actions."),
+    async () => runDerivEaQuickCheck(),
+  );
+
+  addTool(
+    "deriv_ea_backtest_dry",
+    textSchema(
+      "Run deriv_ea deterministic backtest-dry validation for allowlisted Boom/Crash symbols only. This does not launch live trading.",
+      {
+        symbol: { type: "string", enum: ALLOWED_DERIV_EA_BACKTEST_DRY_SYMBOLS },
+      },
+      ["symbol"],
+    ),
+    async (args) => runDerivEaBacktestDry({ symbol: args.symbol }),
   );
 
   addTool(

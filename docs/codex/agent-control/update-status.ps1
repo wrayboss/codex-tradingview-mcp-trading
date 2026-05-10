@@ -1,7 +1,8 @@
 param(
   [switch]$SkipFetch,
   [string]$PovertyKillerEAPath = $env:POVERTYKILLEREA_REPO,
-  [string]$TradingViewDerivPath = $env:TRADINGVIEW_DERIV_REPO
+  [string]$TradingViewDerivPath = $env:TRADINGVIEW_DERIV_REPO,
+  [string]$DerivEaPath = $(if ($env:DERIV_EA_REPO) { $env:DERIV_EA_REPO } else { "C:\deriv_ea" })
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,7 +41,8 @@ function Add-Repo {
 
 Add-Repo "current-repo" $WorkspaceRoot
 Add-Repo "PovertyKillerEA" $PovertyKillerEAPath
-Add-Repo "claude-tradingview-mcp-trading" $TradingViewDerivPath
+Add-Repo "codex-tradingview-mcp-trading" $TradingViewDerivPath
+Add-Repo "deriv_ea" $DerivEaPath
 
 function Add-Block {
   param(
