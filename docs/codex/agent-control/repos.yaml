@@ -56,9 +56,9 @@ repos:
     windows_reference_path: "C:\\Users\\NewAdmin\\claude-tradingview-mcp-trading"
     primary_remotes:
       - name: "origin"
-        url: "https://github.com/wrayboss/claude-tradingview-mcp-trading.git"
+        url: "https://github.com/wrayboss/codex-tradingview-mcp-trading.git"
       - name: "wrayboss"
-        url: "https://github.com/wrayboss/claude-tradingview-mcp-trading.git"
+        url: "https://github.com/wrayboss/codex-tradingview-mcp-trading.git"
     observed_branch: "main"
     observed_status:
       branch_line: "## main...origin/main"

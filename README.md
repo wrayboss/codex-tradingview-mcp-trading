@@ -147,14 +147,14 @@ The preflight is verification-only. It does not change remotes, branches, tradin
 
 It fails closed when:
 
-- `origin` is not the canonical GitHub remote `wrayboss/claude-tradingview-mcp-trading`
+- `origin` is not the canonical GitHub remote `wrayboss/codex-tradingview-mcp-trading`
 - the current branch is `main`
 - the current branch is missing an upstream or is wired to something other than `origin/<current-branch>`
 
 Recommended operator flow:
 
 1. Run `npm run git:preflight`.
-2. If it fails on the remote, repoint `origin` to `https://github.com/wrayboss/claude-tradingview-mcp-trading.git`.
+2. If it fails on the remote, repoint `origin` to `https://github.com/wrayboss/codex-tradingview-mcp-trading.git`.
 3. If it fails on branch safety, create or switch to a dedicated branch such as `codex/<topic>`.
 4. If it fails on upstream wiring, set the upstream with `git push -u origin <branch>`.
 5. Re-run `npm run git:preflight` and only continue with push or PR work after it passes.
