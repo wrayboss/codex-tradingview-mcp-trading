@@ -2,6 +2,7 @@
 *.log
 node_modules/
 .claude/settings.local.json
+.claude/worktrees/
 
 # Runtime state — local only, not for version control
 safety-check-log.json
