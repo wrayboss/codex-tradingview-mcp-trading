@@ -643,7 +643,7 @@ await group("Trading Jarvis plugin", () => {
   });
   eq("operator check exits cleanly from plugin cwd", result.status, 0);
   const output = JSON.parse(result.stdout);
-  eq("operator check resolves repo package from plugin cwd", output.package?.name, "claude-tradingview-mcp-trading");
+  eq("operator check resolves repo package from plugin cwd", output.package?.name, "codex-tradingview-mcp-trading");
   truthy("operator check resolves Codex bridge from plugin cwd", output.codexBridge.ok);
   eq("operator check exposes Deriv-only active symbols", output.activeSymbols.join(","), "VOLATILITY_75,VOLATILITY_50");
   eq("operator check exposes two symbol switch commands", output.symbolSwitchCommands.length, 2);
@@ -671,7 +671,7 @@ await group("Codex Strategy Lab scripts", () => {
 await group("Codex Autonomy Lab", () => {
   const status = buildAutonomyStatus({
     env: { DERIV_API_TOKEN: "redacted-test-token", CODEX_ALLOW_LIVE_TRADING: "" },
-    packageJson: { name: "claude-tradingview-mcp-trading", version: "2.0.0" },
+    packageJson: { name: "codex-tradingview-mcp-trading", version: "2.0.0" },
     executionSymbols: ["VOLATILITY_75", "VOLATILITY_50"],
     researchCatalog: getResearchSymbolCatalog(),
     backtestApprovalExists: false,

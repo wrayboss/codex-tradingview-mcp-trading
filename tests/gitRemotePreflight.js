@@ -11,7 +11,7 @@ export const gitRemotePreflightTests = [
     async run(eq) {
       eq(
         "https remote normalized",
-        normalizeGithubRemote("https://github.com/wrayboss/claude-tradingview-mcp-trading.git"),
+        normalizeGithubRemote("https://github.com/wrayboss/codex-tradingview-mcp-trading.git"),
         CANONICAL_GITHUB_SLUG
       );
     },
@@ -21,7 +21,7 @@ export const gitRemotePreflightTests = [
     async run(eq) {
       eq(
         "ssh remote normalized",
-        normalizeGithubRemote("git@github.com:wrayboss/claude-tradingview-mcp-trading.git"),
+        normalizeGithubRemote("git@github.com:wrayboss/codex-tradingview-mcp-trading.git"),
         CANONICAL_GITHUB_SLUG
       );
     },
@@ -30,7 +30,7 @@ export const gitRemotePreflightTests = [
     name: "passes when origin and upstream are wired safely",
     async run(eq) {
       const result = evaluateGitRemotePreflight({
-        originFetchUrl: "https://github.com/wrayboss/claude-tradingview-mcp-trading.git",
+        originFetchUrl: "https://github.com/wrayboss/codex-tradingview-mcp-trading.git",
         currentBranch: "codex/remote-preflight",
         upstreamRef: "origin/codex/remote-preflight",
       });
@@ -49,7 +49,7 @@ export const gitRemotePreflightTests = [
       eq("result fails", result.ok, false);
       truthy(
         "origin mismatch reported",
-        result.issues.some(issue => issue.includes("expected wrayboss/claude-tradingview-mcp-trading"))
+        result.issues.some(issue => issue.includes("expected wrayboss/codex-tradingview-mcp-trading"))
       );
     },
   },
@@ -57,7 +57,7 @@ export const gitRemotePreflightTests = [
     name: "fails closed on main branch",
     async run(eq, truthy) {
       const result = evaluateGitRemotePreflight({
-        originFetchUrl: "https://github.com/wrayboss/claude-tradingview-mcp-trading.git",
+        originFetchUrl: "https://github.com/wrayboss/codex-tradingview-mcp-trading.git",
         currentBranch: "main",
         upstreamRef: "origin/main",
       });
@@ -72,7 +72,7 @@ export const gitRemotePreflightTests = [
     name: "fails when upstream is missing",
     async run(eq, truthy) {
       const result = evaluateGitRemotePreflight({
-        originFetchUrl: "https://github.com/wrayboss/claude-tradingview-mcp-trading.git",
+        originFetchUrl: "https://github.com/wrayboss/codex-tradingview-mcp-trading.git",
         currentBranch: "codex/remote-preflight",
         upstreamRef: "",
       });
@@ -87,7 +87,7 @@ export const gitRemotePreflightTests = [
     name: "fails when upstream branch does not match current branch",
     async run(eq, truthy) {
       const result = evaluateGitRemotePreflight({
-        originFetchUrl: "https://github.com/wrayboss/claude-tradingview-mcp-trading.git",
+        originFetchUrl: "https://github.com/wrayboss/codex-tradingview-mcp-trading.git",
         currentBranch: "codex/remote-preflight",
         upstreamRef: "origin/codex/other-branch",
       });

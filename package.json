@@ -1,5 +1,5 @@
 {
-  "name": "claude-tradingview-mcp-trading",
+  "name": "codex-tradingview-mcp-trading",
   "version": "2.0.0",
   "description": "Breakout + Retest trading bot - Claude + TradingView MCP + Deriv execution",
   "main": "bot.js",

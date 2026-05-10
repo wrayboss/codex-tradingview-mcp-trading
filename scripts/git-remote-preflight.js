@@ -1,7 +1,7 @@
 import { execFileSync } from "child_process";
 import { pathToFileURL } from "url";
 
-export const CANONICAL_GITHUB_SLUG = "wrayboss/claude-tradingview-mcp-trading";
+export const CANONICAL_GITHUB_SLUG = "wrayboss/codex-tradingview-mcp-trading";
 export const CANONICAL_ORIGIN_URL = `https://github.com/${CANONICAL_GITHUB_SLUG}.git`;
 
 export function normalizeGithubRemote(remoteUrl) {
