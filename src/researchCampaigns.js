@@ -1,4 +1,4 @@
-import { formatDerivActiveSymbols, getResearchSymbolCatalog, resolveResearchSymbol } from "./derivSymbolRegistry.js";
+import { formatDerivActiveSymbols, getResearchSymbolCatalog } from "./derivSymbolRegistry.js";
 import { hasRejectedExperiment } from "./experimentLedger.js";
 import { discoverStrategies } from "./strategyRegistry.js";
 
@@ -25,6 +25,25 @@ function normalizeActiveSymbols(activeSymbols = []) {
   return formatDerivActiveSymbols(activeSymbols);
 }
 
+function normalizedKey(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^deriv:/i, "DERIV:")
+    .toUpperCase()
+    .replace(/[^A-Z0-9:]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function symbolKeys(item = {}) {
+  return new Set([
+    item.symbol,
+    item.derivSymbol,
+    item.displayName,
+    item.tradingViewSymbol,
+    item.tradingViewSearchTerm,
+  ].filter(Boolean).map(normalizedKey));
+}
+
 export function buildSymbolUniverse({
   symbols = [],
   families = [],
@@ -35,14 +54,21 @@ export function buildSymbolUniverse({
   const source = live.length ? "deriv-active_symbols" : "repo-fallback";
   const base = live.length ? live : catalog;
   const wantedFamilies = new Set(families);
-  const wantedSymbols = new Set(symbols.map(symbol => resolveResearchSymbol(symbol).symbol));
+  const wantedSymbolKeys = new Set(symbols.map(normalizedKey));
   const selected = base
     .map(item => ({ ...item, family: symbolFamily(item), researchOnly: !item.executionSupported }))
     .filter(item => {
-      if (wantedSymbols.size && !wantedSymbols.has(item.symbol)) return false;
+      if (wantedSymbolKeys.size && ![...symbolKeys(item)].some(key => wantedSymbolKeys.has(key))) return false;
       if (wantedFamilies.size && !wantedFamilies.has(item.family)) return false;
       return true;
     });
+  if (wantedSymbolKeys.size && selected.length !== wantedSymbolKeys.size) {
+    const matched = new Set(selected.flatMap(item => [...symbolKeys(item)]));
+    const missing = [...wantedSymbolKeys].filter(key => !matched.has(key));
+    if (missing.length) {
+      throw new Error(`Unsupported Deriv research symbol "${missing.join(",")}". Run deriv_active_symbols to inspect the current catalogue.`);
+    }
+  }
   return {
     source,
     symbols: selected,
@@ -143,4 +169,3 @@ export function buildResearchCampaign({
     ],
   };
 }
-

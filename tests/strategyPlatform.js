@@ -188,5 +188,21 @@ export const strategyPlatformTests = [
       truthy("campaign keeps non-rejected symbol runnable", campaign.batchPlan.some(item => item.symbol === "JUMP_75" && item.skip === false));
     },
   },
+  {
+    name: "research campaign symbol universe accepts live active_symbols outside fallback catalog",
+    async run(eq, truthy) {
+      const universe = buildSymbolUniverse({
+        symbols: ["NEW_500"],
+        activeSymbols: [{
+          market: "synthetic_index",
+          submarket: "random_index",
+          symbol: "NEW500",
+          display_name: "New 500 Index",
+        }],
+      });
+      eq("live active_symbols source is used", universe.source, "deriv-active_symbols");
+      eq("live-only symbol is selected", universe.symbols[0].symbol, "NEW_500");
+      eq("live-only symbol stays research-only", universe.symbols[0].executionSupported, false);
+    },
+  },
 ];
-
