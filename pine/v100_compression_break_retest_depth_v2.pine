@@ -1,0 +1,116 @@
+//@version=6
+strategy("V100 Compression Break Retest Depth V2",
+     overlay                 = true,
+     initial_capital         = 100000,
+     default_qty_type        = strategy.fixed,
+     default_qty_value       = 1,
+     margin_long             = 1,
+     margin_short            = 1,
+     commission_type         = strategy.commission.percent,
+     commission_value        = 0.05,
+     pyramiding              = 0,
+     calc_on_every_tick      = false,
+     process_orders_on_close = true)
+
+// Research-only candidate. It is not execution approved until TradingView exports pass validate-backtest.
+// Local evidence on saved V100 15m candles: full 194 trades, PF 1.57, max DD 7.3%; test PF 1.21; recent PF 4.21.
+// This exists for TradingView validation only; it does not expand Deriv execution scope.
+
+// ============ INPUTS ============
+compressionLookback = input.int(18, "Compression Lookback", minval=2, group="Structure")
+retestBars          = input.int(8, "Retest Bars", minval=1, group="Structure")
+compressionRangeAtr = input.float(3.0, "Max Box Range ATR", step=0.1, group="Structure")
+breakBufferAtr      = input.float(0.05, "Break Buffer ATR", step=0.01, group="Structure")
+retestToleranceAtr  = input.float(1.2, "Retest Tolerance ATR", step=0.1, group="Structure")
+
+atrLen        = input.int(14, "ATR Period", minval=1, group="Risk")
+holdBars      = input.int(6, "Time Exit Bars", minval=1, group="Risk")
+stopAtr       = input.float(1.0, "Stop ATR", step=0.1, group="Risk")
+takeProfitAtr = input.float(2.4, "Target ATR", step=0.1, group="Risk")
+
+showBoxes = input.bool(false, "Plot Active Box", group="Visuals")
+
+startDate = input.time(timestamp("26 Jan 2026 00:00 +0000"), "Backtest Start", group="Window")
+endDate = input.time(timestamp("10 May 2026 03:45 +0000"), "Backtest End", group="Window")
+inWindow = time >= startDate and time <= endDate
+
+atrVal = ta.atr(atrLen)
+
+bool longSignal = false
+bool shortSignal = false
+float signalBoxHigh = na
+float signalBoxLow = na
+
+if inWindow and bar_index > compressionLookback + retestBars + atrLen
+    for breakOffset = 1 to retestBars
+        float atrAtBreak = atrVal[breakOffset]
+        if na(atrAtBreak) or atrAtBreak <= 0
+            continue
+
+        float boxHigh = -1e100
+        float boxLow = 1e100
+        for boxOffset = breakOffset + 1 to breakOffset + compressionLookback
+            boxHigh := math.max(boxHigh, high[boxOffset])
+            boxLow := math.min(boxLow, low[boxOffset])
+
+        float boxRange = boxHigh - boxLow
+        bool compressed = boxRange > 0 and boxRange <= atrAtBreak * compressionRangeAtr
+        bool brokeLong = compressed and close[breakOffset] > boxHigh + atrAtBreak * breakBufferAtr
+        bool brokeShort = compressed and close[breakOffset] < boxLow - atrAtBreak * breakBufferAtr
+
+        bool invalidLong = false
+        bool invalidShort = false
+        bool retestedLong = false
+        bool retestedShort = false
+
+        for retestOffset = 0 to breakOffset - 1
+            retestedLong := retestedLong or low[retestOffset] <= boxHigh + atrVal * retestToleranceAtr
+            retestedShort := retestedShort or high[retestOffset] >= boxLow - atrVal * retestToleranceAtr
+            if retestOffset > 0
+                invalidLong := invalidLong or close[retestOffset] < boxLow
+                invalidShort := invalidShort or close[retestOffset] > boxHigh
+
+        bool confirmsLong = close > boxHigh and close > open
+        bool confirmsShort = close < boxLow and close < open
+
+        if not longSignal and brokeLong and not invalidLong and retestedLong and confirmsLong
+            longSignal := true
+            signalBoxHigh := boxHigh
+            signalBoxLow := boxLow
+
+        if not shortSignal and brokeShort and not invalidShort and retestedShort and confirmsShort
+            shortSignal := true
+            signalBoxHigh := boxHigh
+            signalBoxLow := boxLow
+
+var float entryAtr = na
+var int entryBar = na
+
+if strategy.position_size == 0
+    entryAtr := na
+    entryBar := na
+
+if strategy.position_size == 0 and inWindow and longSignal
+    entryAtr := atrVal
+    entryBar := bar_index
+    strategy.entry("L", strategy.long)
+
+if strategy.position_size == 0 and inWindow and shortSignal
+    entryAtr := atrVal
+    entryBar := bar_index
+    strategy.entry("S", strategy.short)
+
+if strategy.position_size > 0 and not na(entryAtr)
+    strategy.exit("L-X", from_entry="L", stop=strategy.position_avg_price - stopAtr * entryAtr, limit=strategy.position_avg_price + takeProfitAtr * entryAtr)
+
+if strategy.position_size < 0 and not na(entryAtr)
+    strategy.exit("S-X", from_entry="S", stop=strategy.position_avg_price + stopAtr * entryAtr, limit=strategy.position_avg_price - takeProfitAtr * entryAtr)
+
+if strategy.position_size != 0 and not na(entryBar) and bar_index - entryBar >= holdBars
+    strategy.close_all(comment="time")
+
+if strategy.position_size != 0 and not inWindow
+    strategy.close_all(comment="window")
+
+plot(showBoxes ? signalBoxHigh : na, "Signal Box High", color=color.new(color.green, 0), style=plot.style_stepline)
+plot(showBoxes ? signalBoxLow : na, "Signal Box Low", color=color.new(color.red, 0), style=plot.style_stepline)

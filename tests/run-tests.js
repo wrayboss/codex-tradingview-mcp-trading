@@ -38,6 +38,7 @@ import {
   toTradingViewSymbol,
 } from "../src/derivSymbolRegistry.js";
 import {
+  backtestCandidate,
   backtestCandidateSet,
   buildResearchMatrix,
   buildAutonomyPlan,
@@ -695,6 +696,7 @@ await group("Codex Autonomy Lab", () => {
   const candidates = generateStrategyCandidates({ symbol: "VOLATILITY_75" });
   truthy("candidate generator returns multiple ideas", candidates.length >= 5);
   truthy("candidate generator includes no execution approval", candidates.every(candidate => candidate.executionApproved === false));
+  truthy("candidate generator includes V75 compression break retest family", candidates.some(candidate => candidate.family === "compression_break_retest_continuation"));
   const researchCandidateV7 = candidates.find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v7");
   truthy("candidate generator includes tuned V75 research V7 candidate", researchCandidateV7);
   eq("tuned V75 research candidate uses EMA 175", researchCandidateV7.params.emaPeriod, 175);
@@ -736,6 +738,14 @@ await group("Codex Autonomy Lab", () => {
   truthy("candidate generator includes Step short-trend family", stepCandidates.some(candidate => candidate.family === "step_short_trend"));
   const volatility100Candidates = generateStrategyCandidates({ symbol: "VOLATILITY_100" });
   truthy("candidate generator includes Volatility compression breakout family", volatility100Candidates.some(candidate => candidate.family === "atr_compression_breakout"));
+  truthy("candidate generator includes compression break retest family", volatility100Candidates.some(candidate => candidate.family === "compression_break_retest_continuation"));
+  truthy("candidate generator includes structure V2 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-structure-v2")));
+  truthy("candidate generator includes conservative V2 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-conservative-v2")));
+  truthy("candidate generator includes depth V2 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-depth-v2")));
+  truthy("candidate generator includes V100 short-only V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-short-v3")));
+  truthy("candidate generator includes V100 trend-filtered V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-short-trend-v3")));
+  truthy("candidate generator includes V100 ATR-regime V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-regime-v3")));
+  truthy("candidate generator includes V100 confirmation-body V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-body-v3")));
 
   const candles = Array.from({ length: 90 }, (_, i) => ({
     epoch: 1000 + i * 900,
@@ -749,6 +759,139 @@ await group("Codex Autonomy Lab", () => {
   truthy("candidate backtest produces trades on trending fixture", results.some(result => result.metrics.trades > 0));
   const ranked = rankBacktestResults(results);
   truthy("ranker sorts best score first", ranked[0].score >= ranked.at(-1).score);
+
+  const compressionBreakRetestCandles = Array.from({ length: 80 }, (_, i) => {
+    const base = 100 + i * 0.02;
+    return {
+      epoch: 3000 + i * 900,
+      open: base,
+      high: base + 0.35,
+      low: base - 0.35,
+      close: base + 0.04,
+    };
+  });
+  for (let i = 24; i < 48; i++) {
+    compressionBreakRetestCandles[i] = {
+      epoch: 3000 + i * 900,
+      open: 101 + Math.sin(i) * 0.05,
+      high: 101.35,
+      low: 100.65,
+      close: 101 + Math.cos(i) * 0.05,
+    };
+  }
+  compressionBreakRetestCandles[48] = { epoch: 3000 + 48 * 900, open: 101.1, high: 103.2, low: 101.0, close: 102.9 };
+  compressionBreakRetestCandles[49] = { epoch: 3000 + 49 * 900, open: 102.8, high: 103.0, low: 101.28, close: 101.72 };
+  compressionBreakRetestCandles[50] = { epoch: 3000 + 50 * 900, open: 101.7, high: 102.55, low: 101.3, close: 102.4 };
+  compressionBreakRetestCandles[51] = { epoch: 3000 + 51 * 900, open: 102.45, high: 104.2, low: 102.3, close: 103.8 };
+  const compressionBreakRetestCandidate = generateStrategyCandidates({ symbol: "VOLATILITY_100" })
+    .find(candidate => candidate.family === "compression_break_retest_continuation");
+  const compressionBreakRetestResult = backtestCandidate({
+    candles: compressionBreakRetestCandles,
+    candidate: compressionBreakRetestCandidate,
+  });
+  truthy("compression break retest model produces backtestable trades", compressionBreakRetestResult.metrics.trades > 0);
+
+  const delayedConfirmationCandles = compressionBreakRetestCandles.map(candle => ({ ...candle }));
+  delayedConfirmationCandles[50] = { epoch: 3000 + 50 * 900, open: 102.1, high: 102.85, low: 101.72, close: 102.65 };
+  const delayedConfirmationResult = backtestCandidate({
+    candles: delayedConfirmationCandles,
+    candidate: compressionBreakRetestCandidate,
+  });
+  truthy("compression break retest allows retest before confirmation candle", delayedConfirmationResult.metrics.trades > 0);
+
+  const compressionDepthCandidate = generateStrategyCandidates({ symbol: "VOLATILITY_100" })
+    .find(candidate => candidate.id.endsWith("compression-break-retest-depth-v2"));
+  const withCompressionParams = params => ({
+    ...compressionDepthCandidate,
+    params: { ...compressionDepthCandidate.params, ...params },
+  });
+
+  const shortCompressionBreakRetestCandles = Array.from({ length: 80 }, (_, i) => {
+    const base = 104 - i * 0.02;
+    return {
+      epoch: 4000 + i * 900,
+      open: base,
+      high: base + 0.35,
+      low: base - 0.35,
+      close: base - 0.04,
+    };
+  });
+  for (let i = 24; i < 48; i++) {
+    shortCompressionBreakRetestCandles[i] = {
+      epoch: 4000 + i * 900,
+      open: 101 + Math.sin(i) * 0.05,
+      high: 101.35,
+      low: 100.65,
+      close: 101 + Math.cos(i) * 0.05,
+    };
+  }
+  shortCompressionBreakRetestCandles[48] = { epoch: 4000 + 48 * 900, open: 100.9, high: 101.0, low: 98.8, close: 99.1 };
+  shortCompressionBreakRetestCandles[49] = { epoch: 4000 + 49 * 900, open: 99.2, high: 100.72, low: 99.0, close: 100.28 };
+  shortCompressionBreakRetestCandles[50] = { epoch: 4000 + 50 * 900, open: 100.25, high: 100.7, low: 99.2, close: 99.45 };
+  shortCompressionBreakRetestCandles[51] = { epoch: 4000 + 51 * 900, open: 99.4, high: 99.55, low: 97.6, close: 98.1 };
+  const shortFixtureResult = backtestCandidate({
+    candles: shortCompressionBreakRetestCandles,
+    candidate: compressionDepthCandidate,
+  });
+  truthy("compression break retest short fixture produces short trades", shortFixtureResult.metrics.trades > 0);
+
+  const shortOnlyOnLongFixture = backtestCandidate({
+    candles: compressionBreakRetestCandles,
+    candidate: withCompressionParams({ sideMode: "short_only" }),
+  });
+  eq("short-only compression candidate blocks long signals", shortOnlyOnLongFixture.metrics.trades, 0);
+  const longOnlyOnShortFixture = backtestCandidate({
+    candles: shortCompressionBreakRetestCandles,
+    candidate: withCompressionParams({ sideMode: "long_only" }),
+  });
+  eq("long-only compression candidate blocks short signals", longOnlyOnShortFixture.metrics.trades, 0);
+
+  const counterTrendLongCandles = compressionBreakRetestCandles.map((candle, index) => {
+    if (index >= 24) return { ...candle };
+    const close = 130 - index * 1.1;
+    return {
+      ...candle,
+      open: close + 0.25,
+      high: close + 0.8,
+      low: close - 0.8,
+      close,
+    };
+  });
+  const counterTrendUnfiltered = backtestCandidate({
+    candles: counterTrendLongCandles,
+    candidate: compressionDepthCandidate,
+  });
+  truthy("counter-trend fixture still has an unfiltered compression signal", counterTrendUnfiltered.metrics.trades > 0);
+  const trendBlocked = backtestCandidate({
+    candles: counterTrendLongCandles,
+    candidate: withCompressionParams({ trendEmaPeriod: 21, trendSlopeLookback: 5, minTrendSlopeAtr: 0.05 }),
+  });
+  eq("trend-filtered compression candidate blocks counter-trend signals", trendBlocked.metrics.trades, 0);
+
+  const lowAtrRegimeBlocked = backtestCandidate({
+    candles: compressionBreakRetestCandles,
+    candidate: withCompressionParams({ atrRegimeLookback: 20, minAtrRatio: 10 }),
+  });
+  eq("ATR regime filter blocks too-low ATR ratio", lowAtrRegimeBlocked.metrics.trades, 0);
+  const highAtrRegimeBlocked = backtestCandidate({
+    candles: compressionBreakRetestCandles,
+    candidate: withCompressionParams({ atrRegimeLookback: 20, maxAtrRatio: 0.01 }),
+  });
+  eq("ATR regime filter blocks too-high ATR ratio", highAtrRegimeBlocked.metrics.trades, 0);
+
+  const weakConfirmationCandles = compressionBreakRetestCandles.map(candle => ({ ...candle }));
+  weakConfirmationCandles[50] = { epoch: 3000 + 50 * 900, open: 102.39, high: 102.55, low: 101.3, close: 102.4 };
+  weakConfirmationCandles[51] = { epoch: 3000 + 51 * 900, open: 102.45, high: 104.2, low: 102.3, close: 102.46 };
+  const weakConfirmationUnfiltered = backtestCandidate({
+    candles: weakConfirmationCandles,
+    candidate: compressionDepthCandidate,
+  });
+  truthy("weak confirmation fixture still has an unfiltered compression signal", weakConfirmationUnfiltered.metrics.trades > 0);
+  const weakConfirmationBlocked = backtestCandidate({
+    candles: weakConfirmationCandles,
+    candidate: withCompressionParams({ minConfirmBodyAtr: 0.1 }),
+  });
+  eq("confirmation-body filter blocks weak confirmation candles", weakConfirmationBlocked.metrics.trades, 0);
 
   const researchCandles = (seed, drift = 0.08) => Array.from({ length: 180 }, (_, i) => {
     const pulse = i % 27 === 0 ? seed * 0.08 : 0;
@@ -1057,6 +1200,29 @@ await group("Pine strategy source", () => {
   truthy("research Pine defaults to 3.5 ATR target", /takeProfitAtr\s*=\s*input\.float\(3\.5,/.test(researchSource));
   truthy("research Pine uses fixed sizing for TradingView synthetic backtests", /default_qty_type\s*=\s*strategy\.fixed/.test(researchSource));
   truthy("research Pine has enough backtest capital for V75 fixed-unit orders", /initial_capital\s*=\s*100000/.test(researchSource));
+
+  const compressionSource = readFileSync("pine/v100_compression_break_retest_depth_v2.pine", "utf8");
+  truthy("compression research Pine source is a strategy", /\bstrategy\s*\(/.test(compressionSource));
+  truthy("compression research Pine uses V100 title", compressionSource.includes("V100 Compression Break Retest Depth V2"));
+  eq("compression research Pine avoids inert alertcondition calls", /\balertcondition\s*\(/.test(compressionSource), false);
+  truthy("compression research Pine defaults to 18-bar box", /compressionLookback\s*=\s*input\.int\(18,/.test(compressionSource));
+  truthy("compression research Pine defaults to 8-bar retest", /retestBars\s*=\s*input\.int\(8,/.test(compressionSource));
+  truthy("compression research Pine defaults to 6-bar hold", /holdBars\s*=\s*input\.int\(6,/.test(compressionSource));
+  truthy("compression research Pine defaults to 1 ATR stop", /stopAtr\s*=\s*input\.float\(1\.0,/.test(compressionSource));
+  truthy("compression research Pine defaults to 2.4 ATR target", /takeProfitAtr\s*=\s*input\.float\(2\.4,/.test(compressionSource));
+  truthy("compression research Pine has local candle window start", compressionSource.includes('timestamp("26 Jan 2026 00:00 +0000")'));
+  truthy("compression research Pine has local candle window end", compressionSource.includes('timestamp("10 May 2026 03:45 +0000")'));
+  truthy("compression research Pine uses fixed sizing", /default_qty_type\s*=\s*strategy\.fixed/.test(compressionSource));
+
+  const compressionV3Source = readFileSync("pine/v100_compression_break_retest_short_trend_v3.pine", "utf8");
+  truthy("compression V3 Pine source is a strategy", /\bstrategy\s*\(/.test(compressionV3Source));
+  truthy("compression V3 Pine uses short-trend title", compressionV3Source.includes("V100 Compression Break Retest Short Trend V3"));
+  eq("compression V3 Pine avoids inert alertcondition calls", /\balertcondition\s*\(/.test(compressionV3Source), false);
+  truthy("compression V3 Pine defaults to trend EMA 50", /trendEmaPeriod\s*=\s*input\.int\(50,/.test(compressionV3Source));
+  truthy("compression V3 Pine defaults to slope lookback 8", /trendSlopeLookback\s*=\s*input\.int\(8,/.test(compressionV3Source));
+  truthy("compression V3 Pine defaults to slope ATR 0.04", /minTrendSlopeAtr\s*=\s*input\.float\(0\.04,/.test(compressionV3Source));
+  truthy("compression V3 Pine is short-only", /\bstrategy\.entry\("S",\s*strategy\.short\)/.test(compressionV3Source));
+  eq("compression V3 Pine does not submit long entries", /\bstrategy\.long\b/.test(compressionV3Source), false);
 });
 
 await group("TradingView Strategy Tester parsing", () => {

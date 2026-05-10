@@ -324,6 +324,139 @@ function addVolatilityCandidates(candidates, base, resolved) {
       params: { emaPeriod: 89, rsiPeriod: 14, rsiLong: 58, rsiShort: 42, slopeLookback: 8, minSlopeAtr: 0.35, holdBars: 7, stopAtr: 1.5, takeProfitAtr: 2.4 },
     },
   );
+  addCompressionBreakRetestCandidate(candidates, base, resolved);
+}
+
+function addCompressionBreakRetestCandidate(candidates, base, resolved) {
+  candidates.push(
+    {
+      ...base,
+      id: `${resolved.symbol}-compression-break-retest-strict`,
+      name: "Compression break retest strict",
+      family: "compression_break_retest_continuation",
+      params: {
+        emaPeriod: 34,
+        rsiPeriod: 14,
+        compressionLookback: 24,
+        retestBars: 8,
+        compressionRangeAtr: 1.8,
+        breakBufferAtr: 0.15,
+        retestToleranceAtr: 0.35,
+        holdBars: 8,
+        stopAtr: 1.2,
+        takeProfitAtr: 2.4,
+      },
+    },
+    {
+      ...base,
+      id: `${resolved.symbol}-compression-break-retest-structure-v2`,
+      name: "Compression break retest structure V2",
+      family: "compression_break_retest_continuation",
+      params: {
+        emaPeriod: 34,
+        rsiPeriod: 14,
+        compressionLookback: 24,
+        retestBars: 8,
+        compressionRangeAtr: 3,
+        breakBufferAtr: 0.1,
+        retestToleranceAtr: 0.6,
+        holdBars: 8,
+        stopAtr: 1.2,
+        takeProfitAtr: 2.4,
+      },
+    },
+    {
+      ...base,
+      id: `${resolved.symbol}-compression-break-retest-conservative-v2`,
+      name: "Compression break retest conservative V2",
+      family: "compression_break_retest_continuation",
+      params: {
+        emaPeriod: 34,
+        rsiPeriod: 14,
+        compressionLookback: 24,
+        retestBars: 8,
+        compressionRangeAtr: 3,
+        breakBufferAtr: 0.1,
+        retestToleranceAtr: 0.6,
+        holdBars: 8,
+        stopAtr: 1,
+        takeProfitAtr: 2,
+      },
+    },
+    {
+      ...base,
+      id: `${resolved.symbol}-compression-break-retest-depth-v2`,
+      name: "Compression break retest depth V2",
+      family: "compression_break_retest_continuation",
+      params: {
+        emaPeriod: 34,
+        rsiPeriod: 14,
+        compressionLookback: 18,
+        retestBars: 8,
+        compressionRangeAtr: 3,
+        breakBufferAtr: 0.05,
+        retestToleranceAtr: 1.2,
+        holdBars: 6,
+        stopAtr: 1,
+        takeProfitAtr: 2.4,
+      },
+    },
+  );
+  if (resolved.symbol !== "VOLATILITY_100") return;
+
+  const depthV3BaseParams = {
+    emaPeriod: 34,
+    rsiPeriod: 14,
+    compressionLookback: 18,
+    retestBars: 8,
+    compressionRangeAtr: 3,
+    breakBufferAtr: 0.05,
+    retestToleranceAtr: 1.2,
+    holdBars: 6,
+    stopAtr: 1,
+    takeProfitAtr: 2.4,
+  };
+  candidates.push(
+    {
+      ...base,
+      id: `${resolved.symbol}-compression-break-retest-short-v3`,
+      name: "Compression break retest short V3",
+      family: "compression_break_retest_continuation",
+      params: { ...depthV3BaseParams, sideMode: "short_only" },
+    },
+    {
+      ...base,
+      id: `${resolved.symbol}-compression-break-retest-short-trend-v3`,
+      name: "Compression break retest short trend V3",
+      family: "compression_break_retest_continuation",
+      params: {
+        ...depthV3BaseParams,
+        sideMode: "short_only",
+        trendEmaPeriod: 50,
+        trendSlopeLookback: 8,
+        minTrendSlopeAtr: 0.04,
+      },
+    },
+    {
+      ...base,
+      id: `${resolved.symbol}-compression-break-retest-regime-v3`,
+      name: "Compression break retest ATR regime V3",
+      family: "compression_break_retest_continuation",
+      params: {
+        ...depthV3BaseParams,
+        atrRegimeLookback: 50,
+        minAtrRatio: 0.75,
+        maxAtrRatio: 1.5,
+      },
+    },
+    {
+      ...base,
+      id: `${resolved.symbol}-compression-break-retest-body-v3`,
+      name: "Compression break retest body V3",
+      family: "compression_break_retest_continuation",
+      params: { ...depthV3BaseParams, minConfirmBodyAtr: 0.25 },
+    },
+  );
 }
 
 export function generateStrategyCandidates({ symbol = "VOLATILITY_75" } = {}) {
@@ -514,6 +647,9 @@ export function generateStrategyCandidates({ symbol = "VOLATILITY_75" } = {}) {
   } else if (isVolatilitySymbol(resolved.symbol) && resolved.symbol !== "VOLATILITY_75" && resolved.symbol !== "VOLATILITY_50") {
     addVolatilityCandidates(candidates, base, resolved);
   }
+  if (isVolatilitySymbol(resolved.symbol) && !candidates.some(candidate => candidate.family === "compression_break_retest_continuation")) {
+    addCompressionBreakRetestCandidate(candidates, base, resolved);
+  }
 
   return candidates;
 }
@@ -593,6 +729,112 @@ function breakoutSignal({ candles, index, lookback = 10 }) {
   return null;
 }
 
+function sideAllowed(side, sideMode = "both") {
+  if (sideMode === "long_only") return side === "long";
+  if (sideMode === "short_only") return side === "short";
+  return true;
+}
+
+function averageFinite(values, endIndex, lookback) {
+  if (!lookback || lookback <= 0) return null;
+  const start = endIndex - lookback + 1;
+  if (start < 0) return null;
+  let sum = 0;
+  let count = 0;
+  for (let i = start; i <= endIndex; i++) {
+    const value = values[i];
+    if (!Number.isFinite(value)) return null;
+    sum += value;
+    count++;
+  }
+  return count === lookback ? sum / count : null;
+}
+
+function passesAtrRegimeFilter({ atrValues, index, atrNow, params }) {
+  if (!params.atrRegimeLookback) return true;
+  const averageAtr = averageFinite(atrValues, index, params.atrRegimeLookback);
+  if (!Number.isFinite(averageAtr) || averageAtr <= 0) return false;
+  const atrRatio = atrNow / averageAtr;
+  if (Number.isFinite(params.minAtrRatio) && atrRatio < params.minAtrRatio) return false;
+  if (Number.isFinite(params.maxAtrRatio) && atrRatio > params.maxAtrRatio) return false;
+  return true;
+}
+
+function passesTrendFilter({ side, candles, index, atrNow, trendEmaValues, params }) {
+  if (!params.trendEmaPeriod) return true;
+  const trendEma = trendEmaValues?.[index];
+  const current = candles[index];
+  if (!current || !Number.isFinite(trendEma)) return false;
+  if (side === "long" && current.close < trendEma) return false;
+  if (side === "short" && current.close > trendEma) return false;
+
+  if (!params.trendSlopeLookback || !params.minTrendSlopeAtr) return true;
+  const priorTrendEma = trendEmaValues?.[index - params.trendSlopeLookback];
+  if (!Number.isFinite(priorTrendEma)) return false;
+  const minSlope = atrNow * params.minTrendSlopeAtr;
+  const slope = trendEma - priorTrendEma;
+  if (side === "long") return slope >= minSlope;
+  return slope <= -minSlope;
+}
+
+function passesConfirmationBodyFilter({ current, atrNow, params }) {
+  if (!params.minConfirmBodyAtr) return true;
+  return Math.abs(current.close - current.open) >= atrNow * params.minConfirmBodyAtr;
+}
+
+function compressionBreakRetestSignal({ candles, index, atrValues, trendEmaValues, params }) {
+  const current = candles[index];
+  const atrNow = atrValues[index];
+  if (!current || !Number.isFinite(atrNow) || atrNow <= 0) return null;
+  if (!passesAtrRegimeFilter({ atrValues, index, atrNow, params })) return null;
+  if (!passesConfirmationBodyFilter({ current, atrNow, params })) return null;
+  const lookback = params.compressionLookback || 24;
+  const retestBars = params.retestBars || 8;
+  const compressionRangeAtr = params.compressionRangeAtr || 1.8;
+  const breakBufferAtr = params.breakBufferAtr || 0.15;
+  const retestToleranceAtr = params.retestToleranceAtr || 0.35;
+  const firstBreakIndex = Math.max(lookback + 1, index - retestBars);
+
+  for (let breakIndex = index - 1; breakIndex >= firstBreakIndex; breakIndex--) {
+    const atrAtBreak = atrValues[breakIndex];
+    if (!Number.isFinite(atrAtBreak) || atrAtBreak <= 0) continue;
+    const boxStart = breakIndex - lookback;
+    const box = candles.slice(boxStart, breakIndex);
+    if (box.length < lookback) continue;
+    const boxHigh = Math.max(...box.map(candle => candle.high));
+    const boxLow = Math.min(...box.map(candle => candle.low));
+    const boxRange = boxHigh - boxLow;
+    if (!Number.isFinite(boxRange) || boxRange <= 0 || boxRange > atrAtBreak * compressionRangeAtr) continue;
+
+    const breakCandle = candles[breakIndex];
+    const longBreak = breakCandle.close > boxHigh + atrAtBreak * breakBufferAtr;
+    const shortBreak = breakCandle.close < boxLow - atrAtBreak * breakBufferAtr;
+    if (!longBreak && !shortBreak) continue;
+
+    const between = candles.slice(breakIndex + 1, index);
+    const retestWindow = candles.slice(breakIndex + 1, index + 1);
+    if (longBreak) {
+      const invalidated = between.some(candle => candle.close < boxLow);
+      const retested = retestWindow.some(candle => candle.low <= boxHigh + atrNow * retestToleranceAtr);
+      const confirmed = current.close > boxHigh && current.close > current.open;
+      const filtered = sideAllowed("long", params.sideMode)
+        && passesTrendFilter({ side: "long", candles, index, atrNow, trendEmaValues, params });
+      if (!invalidated && retested && confirmed && filtered) return "long";
+    }
+
+    if (shortBreak) {
+      const invalidated = between.some(candle => candle.close > boxHigh);
+      const retested = retestWindow.some(candle => candle.high >= boxLow - atrNow * retestToleranceAtr);
+      const confirmed = current.close < boxLow && current.close < current.open;
+      const filtered = sideAllowed("short", params.sideMode)
+        && passesTrendFilter({ side: "short", candles, index, atrNow, trendEmaValues, params });
+      if (!invalidated && retested && confirmed && filtered) return "short";
+    }
+  }
+
+  return null;
+}
+
 function slopeSignal({ candles, index, lookback = 5, atrValue = 1, minSlopeAtr = 0 }) {
   const prior = candles[index - lookback];
   const current = candles[index];
@@ -604,7 +846,7 @@ function slopeSignal({ candles, index, lookback = 5, atrValue = 1, minSlopeAtr =
 }
 
 function signalForCandidate(candidate, context) {
-  const { candle, index, candles, ema, rsi, atr, atrValues } = context;
+  const { candle, index, candles, ema, rsi, atr, atrValues, trendEmaValues } = context;
   if (candidate.family === "rsi_mean_reversion") {
     if (candle.close < ema && rsi <= candidate.params.rsiLong) return "long";
     if (candle.close > ema && rsi >= candidate.params.rsiShort) return "short";
@@ -713,6 +955,15 @@ function signalForCandidate(candidate, context) {
     })) return null;
     return breakoutSignal({ candles, index, lookback: candidate.params.breakoutLookback });
   }
+  if (candidate.family === "compression_break_retest_continuation") {
+    return compressionBreakRetestSignal({
+      candles,
+      index,
+      atrValues,
+      trendEmaValues,
+      params: candidate.params,
+    });
+  }
   if (candidate.family === "trend_chop_classifier") {
     const slope = slopeSignal({
       candles,
@@ -786,14 +1037,18 @@ export function backtestCandidate({ candles, candidate }) {
   const normalizedCandles = validateCandles(candles);
   const closes = normalizedCandles.map(candle => candle.close);
   const ema = emaSeries(closes, candidate.params.emaPeriod);
+  const trendEma = candidate.params.trendEmaPeriod ? emaSeries(closes, candidate.params.trendEmaPeriod) : null;
   const rsi = rsiSeries(closes, candidate.params.rsiPeriod);
   const atr = atrSeries(normalizedCandles, 14);
   const trades = [];
   const warmup = Math.max(
     candidate.params.emaPeriod,
+    (candidate.params.trendEmaPeriod || 0) + (candidate.params.trendSlopeLookback || 0),
     candidate.params.rsiPeriod + 1,
     candidate.params.compressionLookback || 0,
     candidate.params.breakoutLookback || 0,
+    (candidate.params.compressionLookback || 0) + (candidate.params.retestBars || 0),
+    candidate.params.atrRegimeLookback || 0,
     candidate.params.slopeLookback || 0,
     candidate.params.cooldownBars || 0,
     15,
@@ -809,6 +1064,7 @@ export function backtestCandidate({ candles, candidate }) {
       rsi: rsi[i],
       atr: atr[i],
       atrValues: atr,
+      trendEmaValues: trendEma,
     });
     if (!side) continue;
     const entry = normalizedCandles[i].close;
