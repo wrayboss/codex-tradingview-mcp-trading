@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 import { computeApprovalFingerprint, APPROVAL_SCHEMA_VERSION } from "../src/approvalFingerprint.js";
+import { STRATEGY_APPROVAL_MODEL_VERSION, buildStrategyApprovalRecords } from "../src/strategyApproval.js";
 
 const DEFAULT_STATE_DIR = "state";
 const APPROVED_FILE_NAME = "backtest-approved.json";
@@ -248,14 +249,25 @@ export function buildApprovalRecord({
   fingerprint = computeApprovalFingerprint(),
   now = new Date(),
 }) {
+  const validatedAt = now.toISOString();
+  const strategyApprovals = buildStrategyApprovalRecords({
+    fingerprint,
+    approved,
+    demoApproved,
+    realApproved,
+    files,
+    validatedAt,
+  });
   return {
     approved: approved === true,
     demoApproved: demoApproved === true,
     realApproved: realApproved === true,
     approval_schema_version: APPROVAL_SCHEMA_VERSION,
-    validated_at: now.toISOString(),
+    approval_model_version: STRATEGY_APPROVAL_MODEL_VERSION,
+    validated_at: validatedAt,
     files,
     fingerprint,
+    strategyApprovals,
     gates: results,
     metrics: metrics ? {
       net_profit: round(metrics.netProfit, 2),

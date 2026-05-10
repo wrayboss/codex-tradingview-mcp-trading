@@ -1,5 +1,6 @@
 import { resolveResearchSymbol } from "./derivSymbolRegistry.js";
 import { derivAccountMode } from "./derivAccountMode.js";
+import { isApprovalGrantedFor } from "./strategyApproval.js";
 
 function isEnvTrue(value) {
   return value === "true";
@@ -38,7 +39,11 @@ export function buildSafeTradeGateReport({
   const symbol = env.SYMBOL || "VOLATILITY_75";
   const resolved = resolveSymbol(symbol);
   const mode = derivAccountMode(account);
-  const approvalField = mode === "real" ? "realApproved" : "demoApproved";
+  const approvalResult = isApprovalGrantedFor({
+    approval,
+    symbol: resolved.symbol || symbol,
+    accountMode: mode === "real" ? "real" : "demo",
+  });
   const openPositionCount = Array.isArray(openPositions) ? openPositions.length : null;
   const gates = [
     gate(
@@ -68,8 +73,8 @@ export function buildSafeTradeGateReport({
     gate(
       "backtest_approval",
       `${mode === "real" ? "Real" : "Demo"} backtest approval`,
-      approval?.[approvalField] === true,
-      approval?.[approvalField] === true ? `${approvalField}=true` : `${approvalField} missing or false`,
+      approvalResult.ok,
+      approvalResult.ok ? `${approvalResult.field}=true` : approvalResult.reason,
     ),
     gate(
       "open_positions_checked",

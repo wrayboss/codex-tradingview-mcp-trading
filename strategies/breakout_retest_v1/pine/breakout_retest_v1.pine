@@ -1,0 +1,169 @@
+//@version=6
+strategy("Breakout Retest V1",
+     overlay              = true,
+     initial_capital      = 100000,
+     default_qty_type     = strategy.fixed,
+     default_qty_value    = 1,
+     margin_long          = 1,
+     margin_short         = 1,
+     commission_type      = strategy.commission.percent,
+     commission_value     = 0.05,
+     pyramiding           = 0,
+     calc_on_every_tick   = false,
+     process_orders_on_close = true,
+     max_labels_count     = 200)
+
+// TradingView strategy sizing is for synthetic-index backtest validity only.
+// Deriv execution stake and risk stay controlled by rules.json and local env gates.
+
+// ============ INPUTS ============
+gS = "Structure (HTF)"
+htfTF      = input.timeframe("60", "Structure TF",     group=gS)
+pivotLeft  = input.int(5, "Pivot Left",  minval=1,     group=gS)
+pivotRight = input.int(5, "Pivot Right", minval=1,     group=gS)
+
+gB = "Breakout Filter"
+minBreakAtr   = input.float(0.25, "Min Close Distance (ATR)",  step=0.05, group=gB)
+minRangeMult  = input.float(1.2,  "Min Breakout Range vs SMA(10)", step=0.1, group=gB)
+breakRsiLong  = input.float(55,   "Breakout RSI Long Min",     group=gB)
+breakRsiShort = input.float(45,   "Breakout RSI Short Max",    group=gB)
+
+gR = "Retest"
+maxBarsRetest = input.int(6,    "Max Bars After Break", minval=1, group=gR)
+retestTolAtr  = input.float(0.3, "Tolerance (ATR)",       step=0.05, group=gR)
+invalAtr      = input.float(0.5, "Invalidation (ATR)",    step=0.05, group=gR)
+maxBarsConfirm = input.int(2, "Max Bars To Confirm", minval=1, group=gR)
+
+gC = "Confirmation Candle"
+minBodyPct = input.float(0.6, "Min Body % of Range", step=0.05, group=gC)
+allowPin   = input.bool(true, "Allow Pin Bar",   group=gC)
+allowEng   = input.bool(true, "Allow Engulfing", group=gC)
+
+gI = "Indicators"
+emaLen      = input.int(50, "EMA Period (trend)", group=gI)
+rsiLen      = input.int(14, "RSI Period",         group=gI)
+atrLen      = input.int(14, "ATR Period",         group=gI)
+rsiLongMin  = input.float(50, "Entry RSI Long Min",  group=gI)
+rsiShortMax = input.float(50, "Entry RSI Short Max", group=gI)
+
+gK = "Risk"
+atrSlMult      = input.float(1.5, "ATR Stop Mult",   step=0.1, group=gK)
+minRR          = input.float(2.0, "Reward:Risk",     step=0.1, group=gK)
+maxDailyTrades = input.int(3,   "Max Trades / Day",  group=gK)
+
+// ============ INDICATORS ============
+emaVal   = ta.ema(close, emaLen)
+rsiVal   = ta.rsi(close, rsiLen)
+atrVal   = ta.atr(atrLen)
+avgRange = ta.sma(high - low, 10)
+
+// ============ HTF PIVOTS (non-repaint) ============
+htfPH = request.security(syminfo.tickerid, htfTF,
+     ta.pivothigh(pivotLeft, pivotRight), barmerge.gaps_off, barmerge.lookahead_off)
+htfPL = request.security(syminfo.tickerid, htfTF,
+     ta.pivotlow(pivotLeft, pivotRight),  barmerge.gaps_off, barmerge.lookahead_off)
+
+var float lastResistance = na
+var float lastSupport    = na
+if not na(htfPH)
+    lastResistance := htfPH
+if not na(htfPL)
+    lastSupport    := htfPL
+
+// ============ STATE MACHINE ============
+// 0 = idle, 1 = broken-up awaiting retest, 2 = broken-down awaiting retest
+var int   state          = 0
+var float brokenLevel    = na
+var int   barsSinceBreak = 0
+var bool  retestSeen     = false
+var int   confirmBars    = 0
+
+priorLongDrift  = not na(lastResistance) and close[1] > lastResistance and close[2] > lastResistance and close[3] > lastResistance
+priorShortDrift = not na(lastSupport) and close[1] < lastSupport and close[2] < lastSupport and close[3] < lastSupport
+bullBreak = not priorLongDrift and not na(lastResistance) and close > lastResistance + minBreakAtr * atrVal and (high - low) > minRangeMult * avgRange and rsiVal > breakRsiLong
+bearBreak = not priorShortDrift and not na(lastSupport) and close < lastSupport - minBreakAtr * atrVal and (high - low) > minRangeMult * avgRange and rsiVal < breakRsiShort
+
+if state == 0 and bullBreak
+    state          := 1
+    brokenLevel    := lastResistance
+    barsSinceBreak := 0
+    retestSeen     := false
+    confirmBars    := 0
+else if state == 0 and bearBreak
+    state          := 2
+    brokenLevel    := lastSupport
+    barsSinceBreak := 0
+    retestSeen     := false
+    confirmBars    := 0
+else if state != 0
+    barsSinceBreak += 1
+
+// invalidation
+if state == 1 and (barsSinceBreak > maxBarsRetest or close < brokenLevel - invalAtr * atrVal)
+    state := 0
+    retestSeen := false
+if state == 2 and (barsSinceBreak > maxBarsRetest or close > brokenLevel + invalAtr * atrVal)
+    state := 0
+    retestSeen := false
+
+// retest zone: wick touched, body has not closed back across
+retestTouchLong  = state == 1 and barsSinceBreak >= 1 and low  <= brokenLevel + retestTolAtr * atrVal and close > brokenLevel - invalAtr * atrVal
+retestTouchShort = state == 2 and barsSinceBreak >= 1 and high >= brokenLevel - retestTolAtr * atrVal and close < brokenLevel + invalAtr * atrVal
+if state != 0 and not retestSeen and (retestTouchLong or retestTouchShort)
+    retestSeen := true
+    confirmBars := 1
+else if state != 0 and retestSeen
+    confirmBars += 1
+if state != 0 and retestSeen and confirmBars > maxBarsConfirm
+    state := 0
+    retestSeen := false
+inWindowLong  = state == 1 and retestSeen and confirmBars <= maxBarsConfirm
+inWindowShort = state == 2 and retestSeen and confirmBars <= maxBarsConfirm
+
+// ============ CONFIRMATION CANDLE ============
+body      = math.abs(close - open)
+rng       = high - low
+upperWick = high - math.max(close, open)
+lowerWick = math.min(close, open) - low
+isBull    = close > open
+isBear    = close < open
+bodyOk    = rng > 0 and body / rng >= minBodyPct
+
+bullPin = allowPin and lowerWick >= 2 * body and close >= high - rng / 3
+bearPin = allowPin and upperWick >= 2 * body and close <= low + rng / 3
+bullEng = allowEng and isBull and close[1] < open[1] and close >= open[1] and open <= close[1]
+bearEng = allowEng and isBear and close[1] > open[1] and close <= open[1] and open >= close[1]
+
+confirmLong  = inWindowLong and ((isBull and bodyOk) or bullPin or bullEng) and close > emaVal and rsiVal > rsiLongMin
+confirmShort = inWindowShort and ((isBear and bodyOk) or bearPin or bearEng) and close < emaVal and rsiVal < rsiShortMax
+
+// ============ DAILY CAP ============
+var int dailyTrades = 0
+if timeframe.change("1D")
+    dailyTrades := 0
+
+// ============ ENTRIES ============
+if confirmLong and dailyTrades < maxDailyTrades and strategy.position_size == 0
+    sl = close - atrSlMult * atrVal
+    tp = close + atrSlMult * atrVal * minRR
+    strategy.entry("L", strategy.long)
+    strategy.exit("L-X", from_entry="L", stop=sl, limit=tp)
+    dailyTrades += 1
+    state := 0
+    retestSeen := false
+
+if confirmShort and dailyTrades < maxDailyTrades and strategy.position_size == 0
+    sl = close + atrSlMult * atrVal
+    tp = close - atrSlMult * atrVal * minRR
+    strategy.entry("S", strategy.short)
+    strategy.exit("S-X", from_entry="S", stop=sl, limit=tp)
+    dailyTrades += 1
+    state := 0
+    retestSeen := false
+
+// ============ VISUALS ============
+plot(emaVal, "EMA", color=color.orange)
+plot(lastResistance, "R", color=color.new(color.red,   30), style=plot.style_circles)
+plot(lastSupport,    "S", color=color.new(color.green, 30), style=plot.style_circles)
+plotshape(confirmLong,  "Long",  shape.triangleup,   location.belowbar, color.lime, size=size.small)
+plotshape(confirmShort, "Short", shape.triangledown, location.abovebar, color.red,  size=size.small)

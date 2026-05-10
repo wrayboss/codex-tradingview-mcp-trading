@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { compareApprovalFingerprint, computeApprovalFingerprint } from "./approvalFingerprint.js";
 import { isDerivRealAccount } from "./derivAccountMode.js";
+import { isApprovalGrantedFor } from "./strategyApproval.js";
 
 export function isEnvTrue(value) {
   return value === "true";
@@ -36,21 +37,29 @@ export function loadApprovalRecord(stateDir = "state") {
   }
 }
 
-export function assertApprovalLiveSafety({ dryRun, account, approval, currentFingerprint } = {}) {
+export function assertApprovalLiveSafety({ dryRun, account, approval, currentFingerprint, symbol } = {}) {
   if (dryRun) return;
   if (!account?.loginid) {
     throw new Error("Deriv account metadata unavailable. Backtest approval cannot be selected.");
   }
-  const field = isDerivRealAccount(account) ? "realApproved" : "demoApproved";
-  if (approval?.[field] !== true) {
-    throw new Error(`Backtest approval missing ${field}=true. Re-run npm run validate-backtest <csv...>.`);
+  const accountMode = isDerivRealAccount(account) ? "real" : "demo";
+  const scopedApproval = isApprovalGrantedFor({ approval, fingerprint: currentFingerprint, symbol, accountMode });
+  if (scopedApproval.scoped) {
+    if (!scopedApproval.ok) {
+      throw new Error(`Backtest approval missing ${scopedApproval.field}=true for ${symbol || "requested symbol"}: ${scopedApproval.reason}. Re-run npm run validate-backtest <csv...>.`);
+    }
+    return;
   }
-  if (!approval.fingerprint || typeof approval.fingerprint !== "object") {
+
+  if (!approval?.fingerprint || typeof approval.fingerprint !== "object") {
     throw new Error("Backtest approval is stale: missing fingerprint. Re-run npm run validate-backtest <csv...>.");
   }
   const comparison = compareApprovalFingerprint(approval.fingerprint, currentFingerprint);
   if (!comparison.ok) {
     throw new Error(`Backtest approval is stale: ${comparison.reason}. Re-run npm run validate-backtest <csv...>.`);
+  }
+  if (!scopedApproval.ok) {
+    throw new Error(`Backtest approval missing ${scopedApproval.field}=true. Re-run npm run validate-backtest <csv...>.`);
   }
 }
 
@@ -60,10 +69,11 @@ export function assertRuntimeLiveSafety({
   env = process.env,
   approval,
   currentFingerprint,
+  symbol,
 } = {}) {
   assertKillSwitch({ dryRun, env });
   assertAccountLiveSafety({ dryRun, account, env });
-  assertApprovalLiveSafety({ dryRun, account, approval, currentFingerprint });
+  assertApprovalLiveSafety({ dryRun, account, approval, currentFingerprint, symbol });
 }
 
 export function loadCurrentApprovalContext({ stateDir = "state" } = {}) {

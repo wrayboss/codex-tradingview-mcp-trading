@@ -1,0 +1,22 @@
+{
+  "strategy": "v75_ema_rsi_momentum_research_v1",
+  "version": 1,
+  "family": "ema_rsi_momentum",
+  "description": "Research-only EMA/RSI momentum candidate for Volatility 75 15m study.",
+  "symbols": ["VOLATILITY_75"],
+  "timeframes": { "entry": "15" },
+  "parameters": {
+    "ema_period": 200,
+    "rsi_period": 14,
+    "rsi_long_min": 62,
+    "rsi_short_max": 38,
+    "hold_bars": 8,
+    "stop_atr": 2.0,
+    "take_profit_atr": 3.5
+  },
+  "execution": {
+    "eligible": false,
+    "reason": "research-only candidate; no strategy-scoped approval exists"
+  }
+}
+

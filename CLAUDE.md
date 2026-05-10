@@ -66,6 +66,10 @@ When reporting results, prefer:
 | `src/contractMonitor.js` | Post-order polling loop (30s interval, 12h max) |
 | `src/derivClient.js` | WebSocket client — `sendRetry()` for candles/status, plain `send()` for buy |
 | `src/derivSymbolRegistry.js` | Codex Strategy Lab research symbol catalogue and TradingView names |
+| `src/strategyRegistry.js` | Multi-strategy manifest discovery and lifecycle metadata |
+| `src/strategyApproval.js` | Strategy-scoped approval keys and approval lookup |
+| `src/experimentLedger.js` | Durable promoted/rejected research experiment memory |
+| `src/researchCampaigns.js` | Read-only multi-symbol research campaign planning |
 | `src/strategyAutonomy.js` | Research-only Codex Autonomy Lab planning and candidate backtest scoring |
 | `src/tradingJarvis.js` | Trading Jarvis command-center analysis, watchlist scan, and trade-desk guardrails |
 | `scripts/jarvis.js` | Local Trading Jarvis CLI |
