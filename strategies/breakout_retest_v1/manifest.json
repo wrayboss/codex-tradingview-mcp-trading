@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "strategyId": "breakout_retest_v1",
+  "version": 1,
+  "family": "breakout_retest",
+  "lifecycleState": "live",
+  "description": "1H structure breakout and 15m retest strategy currently approved for narrow V75/V50 execution when runtime gates pass.",
+  "supportedResearchSymbols": ["VOLATILITY_75", "VOLATILITY_50"],
+  "executionEligibleSymbols": ["VOLATILITY_75", "VOLATILITY_50"],
+  "timeframes": { "structure": "60", "entry": "15" },
+  "paths": {
+    "rules": "strategies/breakout_retest_v1/rules.json",
+    "pine": "strategies/breakout_retest_v1/pine/breakout_retest_v1.pine",
+    "tests": ["tests/integration.js", "tests/backtestValidator.js"],
+    "evidence": ["strategies/breakout_retest_v1/evidence/README.md"]
+  },
+  "approval": {
+    "status": "runtime_gate_required",
+    "artifact": "state/backtest-approved.json",
+    "requiresStrategyScopedApproval": true
+  },
+  "hostNotes": [
+    "Root rules.json and pine/breakout_retest_v1.pine remain runtime compatibility mirrors in this PR.",
+    "Execution eligibility is not inherited by other strategies or symbols."
+  ]
+}
+

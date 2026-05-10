@@ -100,6 +100,9 @@ export const backtestValidatorTests = [
       truthy("approval record includes rules hash fingerprint", typeof record.fingerprint.rules_hash === "string");
       truthy("approval record includes package hash fingerprint", typeof record.fingerprint.package_hash === "string");
       truthy("approval record includes validator schema version", record.fingerprint.validator_schema_version >= 2);
+      truthy("approval record includes runtime fingerprint", typeof record.fingerprint.runtime_fingerprint === "string");
+      truthy("approval record includes strategy scoped approvals", record.strategyApprovals.length >= 1);
+      truthy("strategy scoped approval key includes strategy", record.strategyApprovals[0].key.startsWith("breakout_retest_v1@1:"));
       truthy("cycle contract remains JSON-readable", JSON.parse(JSON.stringify(record)).approved === true);
     },
   },
@@ -215,6 +218,7 @@ export const backtestValidatorTests = [
         eq("saved demoApproved boolean true", saved.demoApproved, true);
         eq("saved realApproved boolean true", saved.realApproved, true);
         truthy("saved fingerprint includes symbols", Array.isArray(saved.fingerprint.symbols));
+        truthy("saved strategy approvals include symbols", saved.strategyApprovals.some(item => item.symbol === "VOLATILITY_75"));
         eq("saved file path", saved.files[0], `${FIXTURES}/list-of-trades-standard.csv`);
       } finally {
         rmSync(stateDir, { recursive: true, force: true });

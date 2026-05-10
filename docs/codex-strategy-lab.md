@@ -7,6 +7,8 @@ Codex Strategy Lab is the research/operator layer for Deriv derived-market work.
 - Research access can inspect all known Deriv derived/synthetic symbols.
 - Execution remains limited to `VOLATILITY_75` and `VOLATILITY_50` unless the strategy, rules, constraints, Pine, tests, and backtest approval are intentionally expanded.
 - Crash/Boom, Jump, Step, Range Break, baskets, Bull/Bear, and additional Volatility symbols are research/chart/candle candidates only.
+- Strategy manifests live under `strategies/<strategy_id>/`; a symbol can be research-supported without being execution-eligible.
+- New validator output contains strategy-scoped approvals so approval for one strategy version and symbol does not approve unrelated strategies or symbols.
 - Research commands must not write `.env`, `rules.json`, `state/backtest-approved.json`, `trades.csv`, or `safety-check-log.json`.
 - Live/demo order placement still requires explicit user instruction in the current conversation and the existing repo gates.
 
@@ -41,6 +43,11 @@ npm run codex:autonomy -- backtest --file state/research/candles/VOLATILITY_75-9
 `npm run research:candles` fetches read-only Deriv candles and writes JSON under `state/research/candles/`, which is ignored by Git through the existing `state/` rule.
 
 `npm run codex:autonomy` is the guarded local research loop. It reports available Codex capabilities, builds a mission plan, and ranks deterministic candidate strategy ideas against candle JSON. It never approves execution, writes `.env`, edits `rules.json`, or places orders.
+
+Research campaigns are represented by `src/researchCampaigns.js`. They build
+read-only mission definitions, batch plans, walk-forward-ready evidence flow, and
+rejection-memory skips. Results should be remembered through
+`src/experimentLedger.js` under `state/research/experiment-ledger.jsonl`.
 
 `npm run jarvis` is the local Trading Jarvis command center. It can produce roadmap, morning-brief, chart-analysis, watchlist-scan, strategy-builder, backtest-operator, and trade-desk checklists. Analysis, scan, and morning-brief commands remain research/operator surfaces; only the existing validated bot commands can place orders.
 
@@ -109,5 +116,10 @@ Research candidates move toward execution only through this path:
 3. Backtest locally and reject weak or overfit candidates.
 4. Validate Pine in TradingView when available.
 5. Export Strategy Tester trades and run `npm run validate-backtest <csv...>`.
-6. Recheck `state/backtest-approved.json`.
-7. Only then consider dry-run or explicit demo execution.
+6. Confirm the generated `strategyApprovals` entry matches the exact strategy id,
+   strategy version, symbol, timeframes, rules hash, Pine hash, validator schema,
+   and runtime fingerprint.
+7. Recheck `state/backtest-approved.json`.
+8. Only then consider dry-run or explicit demo execution for that strategy-symbol pair.
+
+See `docs/multi-strategy-platform.md` for the full platform model.

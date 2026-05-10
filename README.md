@@ -23,6 +23,19 @@ For reusable agent instructions and prompt-driven workflows in this repo:
 
 No Crash/Boom symbols. `bot.js` refuses to start when `SYMBOL` is not listed in `rules.json`.
 
+## Multi-Strategy Research Foundation
+
+Strategy metadata now lives under `strategies/<strategy_id>/` and is discoverable
+through `src/strategyRegistry.js`. Research can cover the broad Deriv synthetic
+universe, including Crash, Boom, Jump, Step, Range Break, baskets, Bull/Bear, and
+additional Volatility symbols, but execution eligibility remains explicit per
+strategy and per symbol.
+
+Backtest approval records now include strategy-scoped approval entries. A future
+approval for one strategy version and symbol does not approve unrelated strategies
+or symbols. See `docs/multi-strategy-platform.md` and
+`docs/architecture-report-multi-strategy-platform.md`.
+
 ## Setup
 
 ```powershell
@@ -337,6 +350,10 @@ node scripts/set-chart.js VOLATILITY_50 15
 | `src/riskManager.js` | Daily cap, ATR-to-USD risk conversion |
 | `src/contractMonitor.js` | Post-order polling loop (30s interval, 12h timeout) |
 | `src/derivClient.js` | WebSocket client with retry/backoff |
+| `src/strategyRegistry.js` | Strategy manifest discovery and lifecycle metadata |
+| `src/strategyApproval.js` | Strategy-scoped approval keys and lookup helpers |
+| `src/experimentLedger.js` | Durable promoted/rejected research experiment ledger |
+| `src/researchCampaigns.js` | Read-only multi-symbol research campaign definitions |
 | `pine/breakout_retest_v1.pine` | TradingView strategy for backtesting |
 | `scripts/validate-backtest.js` | Gate validator — reads TV CSV, writes backtest-approved.json |
 | `tests/integration.js` | Integration coverage for cycle guards, live gates, dry-run guarantees, order placement, retry exhaustion, and reconciliation |

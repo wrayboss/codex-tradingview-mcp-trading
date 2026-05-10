@@ -4,6 +4,7 @@ import { atrSeries, emaSeries, rsiSeries } from "./indicators.js";
 import { resolveResearchSymbol } from "./derivSymbolRegistry.js";
 import { generateStrategyCandidates } from "./strategyAutonomy.js";
 import { derivAccountMode, isDerivRealAccount } from "./derivAccountMode.js";
+import { isApprovalGrantedFor } from "./strategyApproval.js";
 
 export function buildJarvisRoadmap() {
   return {
@@ -444,12 +445,17 @@ export function buildTradeDeskChecklist({
   try { symbolResolved = resolveResearchSymbol(symbol); } catch {}
   const mode = derivAccountMode(account);
   const isReal = isDerivRealAccount(account);
-  const approvalPass = isReal ? approval?.realApproved === true : approval?.demoApproved === true;
+  const approvalResult = isApprovalGrantedFor({
+    approval,
+    symbol: symbolResolved?.symbol || symbol,
+    accountMode: isReal ? "real" : "demo",
+  });
+  const approvalPass = approvalResult.ok;
   const openPositionCount = Array.isArray(openPositions) ? openPositions.length : null;
   const gates = [
     gate("explicit_current_request", "Explicit execution request in current conversation", explicitExecutionRequest, explicitExecutionRequest ? "present" : "missing"),
     gate("account_authorized", "Deriv account metadata verified", Boolean(account?.loginid), account?.loginid ? `${mode}:${account.loginid}` : "missing"),
-    gate("backtest_approval", isReal ? "Real approval gate" : "Demo approval gate", approvalPass, approvalPass ? "approved" : "missing or false"),
+    gate("backtest_approval", isReal ? "Real approval gate" : "Demo approval gate", approvalPass, approvalPass ? "approved" : approvalResult.reason),
     gate("open_positions_checked", "Open position check", Array.isArray(openPositions), Array.isArray(openPositions) ? "checked" : "not checked"),
     gate("no_open_positions", "No open Deriv positions", Array.isArray(openPositions) && openPositions.length === 0, openPositionCount == null ? "unknown" : `${openPositionCount} open position(s)`),
     gate("symbol_execution_supported", "Symbol is execution-supported", Boolean(symbolResolved?.executionSupported), symbol),

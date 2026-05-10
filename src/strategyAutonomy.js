@@ -3,6 +3,9 @@ import path from "path";
 import { atrSeries, emaSeries, rsiSeries } from "./indicators.js";
 import { getResearchSymbolCatalog, resolveResearchSymbol } from "./derivSymbolRegistry.js";
 import { getOperatorWatchlist } from "./watchlist.js";
+import { DEFAULT_EXPERIMENT_LEDGER } from "./experimentLedger.js";
+import { buildResearchCampaign } from "./researchCampaigns.js";
+import { discoverStrategies } from "./strategyRegistry.js";
 
 function safePackageJson(rootDir = process.cwd()) {
   try {
@@ -21,6 +24,7 @@ export function buildAutonomyStatus({
   packageJson = safePackageJson(),
   executionSymbols = defaultExecutionSymbols(),
   researchCatalog = getResearchSymbolCatalog(),
+  strategyRegistry = discoverStrategies(),
   backtestApprovalExists = existsSync(path.join(process.cwd(), "state", "backtest-approved.json")),
 } = {}) {
   const token = env.DERIV_API_TOKEN || "";
@@ -54,6 +58,16 @@ export function buildAutonomyStatus({
         sideEffects: "local research scoring only; no orders and no approval artifact",
       },
       {
+        id: "research_campaign_plan",
+        command: "buildResearchCampaign({ symbols, strategies, timeframes })",
+        sideEffects: "read-only mission definition; no orders and no approval artifact",
+      },
+      {
+        id: "experiment_ledger",
+        command: `appendExperiment({ filePath: "${DEFAULT_EXPERIMENT_LEDGER}", experiment })`,
+        sideEffects: "appends promoted or rejected research memory under ignored state/research",
+      },
+      {
         id: "promotion_gate",
         command: "npm run validate-backtest <tv-export.csv...>",
         sideEffects: "writes state/backtest-approved.json only after TradingView export validation",
@@ -63,6 +77,11 @@ export function buildAutonomyStatus({
       catalogCount: researchCatalog.length,
       executionEligibleCount,
       researchOnlyCount: researchCatalog.length - executionEligibleCount,
+    },
+    strategies: {
+      count: strategyRegistry.strategies.length,
+      live: strategyRegistry.byLifecycle("live").map(strategy => strategy.strategyId),
+      research: strategyRegistry.byLifecycle("research").map(strategy => strategy.strategyId),
     },
     execution: {
       symbols: [...executionSymbols],
@@ -103,6 +122,14 @@ export function buildAutonomyPlan({
     objective,
     mode: "research_only",
     symbols: resolvedSymbols,
+    campaign: buildResearchCampaign({
+      id: "autonomy-campaign-draft",
+      objective,
+      symbols,
+      timeframes: [String(granularity / 60)],
+      candleCount,
+      granularity,
+    }),
     phases: [
       {
         id: "discover_catalog",

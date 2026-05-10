@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "strategyId": "v75_ema_rsi_momentum_research_v1",
+  "version": 1,
+  "family": "ema_rsi_momentum",
+  "lifecycleState": "research",
+  "description": "Research-only V75 EMA/RSI momentum Pine candidate. It is not execution approved.",
+  "supportedResearchSymbols": ["VOLATILITY_75"],
+  "executionEligibleSymbols": [],
+  "timeframes": { "entry": "15" },
+  "paths": {
+    "rules": "strategies/v75_ema_rsi_momentum_research_v1/rules.json",
+    "pine": "strategies/v75_ema_rsi_momentum_research_v1/pine/v75_ema_rsi_momentum_research_v1.pine",
+    "tests": ["tests/run-tests.js"],
+    "evidence": ["strategies/v75_ema_rsi_momentum_research_v1/evidence/README.md"]
+  },
+  "approval": {
+    "status": "not_approved",
+    "artifact": null,
+    "requiresStrategyScopedApproval": true
+  },
+  "hostNotes": [
+    "This strategy can be studied by Jarvis, Codex, Claude Code, or OpenClaw without granting execution rights.",
+    "Promotion requires a separate strategy-symbol-version approval record."
+  ]
+}
+

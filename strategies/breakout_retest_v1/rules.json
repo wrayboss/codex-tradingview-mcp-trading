@@ -1,0 +1,71 @@
+{
+  "strategy": "breakout_retest_v1",
+  "version": 1,
+  "description": "1H structure breakout, retest on 15m with confirmation candle + EMA50/RSI trend filter. Volatility 75 / Volatility 50 only.",
+  "symbols": ["VOLATILITY_75", "VOLATILITY_50"],
+  "timeframes": { "structure": "60", "entry": "15" },
+
+  "structure": {
+    "pivot_left": 5,
+    "pivot_right": 5,
+    "max_active_levels": 5,
+    "level_ttl_bars_htf": 50
+  },
+
+  "indicators": {
+    "ema":       { "period": 50, "tf": "15" },
+    "rsi":       { "period": 14, "tf": "15" },
+    "atr":       { "period": 14, "tf": "15" },
+    "range_sma": { "period": 10, "tf": "15" }
+  },
+
+  "breakout": {
+    "min_close_distance_atr": 0.25,
+    "min_range_multiplier": 1.2,
+    "rsi_long_min": 55,
+    "rsi_short_max": 45
+  },
+
+  "retest": {
+    "max_bars_after_break": 6,
+    "tolerance_atr": 0.3,
+    "invalidation_atr": 0.5,
+    "rearm_requires_new_pivot": true
+  },
+
+  "confirmation": {
+    "min_body_pct": 0.6,
+    "allow_pin_bar": true,
+    "allow_engulfing": true,
+    "max_bars_to_confirm": 2
+  },
+
+  "trend_filter": {
+    "ema_required": true,
+    "rsi_long_min_entry": 50,
+    "rsi_short_max_entry": 50
+  },
+
+  "risk": {
+    "stake_usd": 10,
+    "stop_loss_usd": 5,
+    "atr_sl_multiplier": 1.5,
+    "min_rr": 2.0,
+    "max_trades_per_day": 3,
+    "max_daily_loss_usd": 10,
+    "max_consecutive_losses": 2,
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 4
+  },
+
+  "session": { "utc_start_hour": 0, "utc_end_hour": 24 },
+
+  "execution": {
+    "deriv_contract": "MULTIPLIER",
+    "multiplier_by_symbol": {
+      "VOLATILITY_75": 50,
+      "VOLATILITY_50": 80
+    },
+    "decision_on": "bar_close"
+  }
+}

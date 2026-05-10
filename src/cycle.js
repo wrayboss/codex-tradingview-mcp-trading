@@ -157,6 +157,7 @@ export async function runCycle(config, rules, risk, opts = {}) {
         env: opts.env || process.env,
         approval,
         currentFingerprint,
+        symbol,
       });
     } catch (err) {
       console.log(`[gate] ${err.message}`);
