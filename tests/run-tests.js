@@ -1217,6 +1217,7 @@ await group("Pine strategy source", () => {
   truthy("compression research Pine has local candle window start", compressionSource.includes('timestamp("26 Jan 2026 00:00 +0000")'));
   truthy("compression research Pine has local candle window end", compressionSource.includes('timestamp("10 May 2026 03:45 +0000")'));
   truthy("compression research Pine uses fixed sizing", /default_qty_type\s*=\s*strategy\.fixed/.test(compressionSource));
+  truthy("compression research Pine avoids same-bar opposite entries", /shortSignal\s+and\s+not\s+longSignal/.test(compressionSource));
 
   const compressionV3Source = readFileSync("pine/v100_compression_break_retest_short_trend_v3.pine", "utf8");
   truthy("compression V3 Pine source is a strategy", /\bstrategy\s*\(/.test(compressionV3Source));

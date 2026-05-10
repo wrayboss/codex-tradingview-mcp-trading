@@ -1604,7 +1604,9 @@ export function createCodexTools({
       if (args.candleFiles && typeof args.candleFiles === "object") {
         for (const [symbol, file] of Object.entries(args.candleFiles)) {
           const payload = loadCandlePayload(file);
-          symbolCandles[symbol || payload.symbol] = payload.candles;
+          const resolvedSymbol = symbol || payload.symbol;
+          if (!resolvedSymbol) throw new Error(`No symbol provided for candle file ${file}.`);
+          symbolCandles[resolvedSymbol] = payload.candles;
         }
       }
       return buildResearchMatrix({ symbolCandles });

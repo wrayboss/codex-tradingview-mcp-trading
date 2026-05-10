@@ -95,7 +95,7 @@ if strategy.position_size == 0 and inWindow and longSignal
     entryBar := bar_index
     strategy.entry("L", strategy.long)
 
-if strategy.position_size == 0 and inWindow and shortSignal
+if strategy.position_size == 0 and inWindow and shortSignal and not longSignal
     entryAtr := atrVal
     entryBar := bar_index
     strategy.entry("S", strategy.short)
