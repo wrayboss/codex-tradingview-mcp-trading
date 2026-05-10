@@ -257,8 +257,10 @@ export function buildStrategyBuilderBrief({ objective = "improve strategy eviden
     objective,
     symbols: resolveSymbols(symbols),
     steps: [
-      { id: "fetch_research_candles", command: "npm run research:candles -- <symbol> --count=1000 --granularity=900 --json" },
+      { id: "fetch_research_candles", command: "npm run research:candles -- <symbol> --count=10000 --granularity=900 --json" },
       { id: "generate_candidates", command: "npm run codex:autonomy -- backtest --file <candle-json> --json" },
+      { id: "research_matrix", command: "npm run codex:autonomy -- sweep --files SYMBOL=state/research/candles/<file>.json --json" },
+      { id: "strict_gate_review", command: "require train/test/recent evidence near PF 1.6 and local drawdown under 15%" },
       { id: "review_candidate_quality", command: "reject weak, overfit, low-trade, or high-drawdown candidates" },
       { id: "pine_translation", command: "translate only promoted candidates into Pine after local evidence" },
       { id: "promotion_gate", command: "npm run validate-backtest <tv-export.csv...>" },
@@ -342,7 +344,7 @@ function metricDeltas(currentMetrics = {}, researchMetrics = {}) {
 
 function researchV75Evidence() {
   return generateStrategyCandidates({ symbol: "VOLATILITY_75" })
-    .find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v1")?.evidence || null;
+    .find(candidate => candidate.id === "VOLATILITY_75-ema-rsi-momentum-research-v7")?.evidence || null;
 }
 
 export function buildStrategyCompareSurface({
@@ -350,7 +352,7 @@ export function buildStrategyCompareSurface({
   currentSummary = null,
   researchSummary = null,
   currentStrategyName = "Breakout Retest V1",
-  researchStrategyName = "V75 EMA RSI Momentum Research V1",
+  researchStrategyName = "V75 EMA RSI Momentum Research V7",
 } = {}) {
   const currentTvSummary = normalizeStrategyTesterSummary(currentSummary);
   const researchTvSummary = normalizeStrategyTesterSummary(researchSummary);
@@ -361,7 +363,7 @@ export function buildStrategyCompareSurface({
   const comparableDeltas = deltas.filter(item => item.comparable);
   const blockers = [];
   if (!currentTvSummary.hasSummary) blockers.push("Current executable Strategy Tester summary is missing; attach Breakout Retest V1 and read visible summary metrics.");
-  if (!researchTvSummary.hasSummary) blockers.push("Research candidate Strategy Tester summary is missing; attach V75 EMA RSI Momentum Research V1 and read visible summary metrics.");
+  if (!researchTvSummary.hasSummary) blockers.push("Research candidate Strategy Tester summary is missing; attach V75 EMA RSI Momentum Research V7 and read visible summary metrics.");
   if (currentTvSummary.invalidData) blockers.push("Current executable Strategy Tester summary reports INVALID DATA.");
   if (researchTvSummary.invalidData) blockers.push("Research candidate Strategy Tester summary reports INVALID DATA.");
   if (!comparableDeltas.length) blockers.push("No comparable TradingView summary metric deltas are available yet.");
@@ -398,8 +400,8 @@ export function buildStrategyCompareSurface({
     },
     researchCandidate: {
       name: researchStrategyName,
-      strategyId: "v75_ema_rsi_momentum_research_v1",
-      pineFile: "pine/v75_ema_rsi_momentum_research_v1.pine",
+      strategyId: "v75_ema_rsi_momentum_research_v7",
+      pineFile: "pine/v75_ema_rsi_momentum_research_v7.pine",
       symbol: {
         symbol: researchSymbol.symbol,
         derivSymbol: researchSymbol.derivSymbol,

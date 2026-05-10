@@ -2,6 +2,7 @@
 import "dotenv/config";
 import {
   backtestCandidateSet,
+  buildResearchMatrix,
   buildAutonomyPlan,
   buildAutonomyStatus,
   generateStrategyCandidates,
@@ -53,6 +54,45 @@ function printPlan(plan) {
   }
 }
 
+function parseFileMap(value = "") {
+  return value
+    .split(",")
+    .map(item => item.trim())
+    .filter(Boolean)
+    .map(item => {
+      const equals = item.indexOf("=");
+      if (equals === -1) return { symbol: null, file: item };
+      return {
+        symbol: item.slice(0, equals).trim(),
+        file: item.slice(equals + 1).trim(),
+      };
+    });
+}
+
+function loadSweepFiles(filesArg) {
+  const entries = parseFileMap(filesArg);
+  if (!entries.length) {
+    throw new Error("sweep requires --files SYMBOL=path.json[,SYMBOL=path.json].");
+  }
+  const symbolCandles = {};
+  for (const entry of entries) {
+    const payload = loadCandlePayload(entry.file);
+    const symbol = entry.symbol || payload.symbol;
+    if (!symbol) throw new Error(`No symbol provided for ${entry.file}; use SYMBOL=${entry.file}.`);
+    symbolCandles[symbol] = payload.candles;
+  }
+  return symbolCandles;
+}
+
+function printSweep(report) {
+  console.log(`Research sweep: ${report.symbols.length} symbols, mode=${report.mode}`);
+  console.log(`trade execution allowed: ${report.tradeExecutionAllowed}`);
+  console.log("Top symbols:");
+  for (const item of report.shortlist.topSymbols) {
+    console.log(`- ${item.symbol}: ${item.bestFamily || "none"} status=${item.bestStatus} score=${item.score}`);
+  }
+}
+
 const command = process.argv[2] || "status";
 const json = hasFlag("json");
 
@@ -94,6 +134,11 @@ if (command === "status") {
       console.log(`${result.candidateId}: score=${result.score} trades=${result.metrics.trades} netPoints=${result.metrics.netPoints.toFixed(4)} pf=${result.metrics.profitFactor}`);
     }
   }
+} else if (command === "sweep") {
+  const symbolCandles = loadSweepFiles(argValue("files", ""));
+  const report = buildResearchMatrix({ symbolCandles });
+  if (json) printJson(report);
+  else printSweep(report);
 } else {
   throw new Error(`Unknown codex autonomy command: ${command}`);
 }

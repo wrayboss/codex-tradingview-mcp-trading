@@ -77,12 +77,12 @@ export class DerivClient {
     return this.account;
   }
 
-  async candles({ symbol, granularity, count }) {
+  async candles({ symbol, granularity, count, end = "latest" }) {
     const r = await this.sendRetry({
       ticks_history: symbol,
       adjust_start_time: 1,
       count,
-      end: "latest",
+      end,
       granularity,
       style: "candles",
     });
