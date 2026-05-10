@@ -7,4 +7,3 @@ Current coverage lives in the repo-level harness:
 - `tests/run-tests.js`
 
 The manifest points to these files until strategy-specific test shards are split out.
-

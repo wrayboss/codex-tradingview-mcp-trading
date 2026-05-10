@@ -54,4 +54,3 @@ Build the first executable campaign runner for research only:
 That PR should not add new execution symbols. Its acceptance gate should be a
 queryable ledger with both promoted and rejected research outcomes across at least
 one non-V75/V50 family.
-

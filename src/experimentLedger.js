@@ -91,4 +91,3 @@ export function hasRejectedExperiment(records = [], {
     && record.timeframe === timeframe
     && (record.parameterHash === expectedHash || JSON.stringify(record.parameters) === JSON.stringify(parameters)));
 }
-

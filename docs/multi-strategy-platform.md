@@ -95,4 +95,3 @@ No campaign result or local backtest score is execution approval.
 The new domain modules are plain Node modules. They do not depend on Codex-specific
 MCP paths or agent names. Codex, Claude Code, and OpenClaw can all read the same
 strategy manifests, campaign plans, ledger records, and scoped approval records.
-

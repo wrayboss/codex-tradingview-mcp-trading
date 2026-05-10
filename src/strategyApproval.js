@@ -148,4 +148,3 @@ export function isApprovalGrantedFor({ approval, fingerprint = null, symbol, acc
 export function parameterHash(parameters = {}) {
   return hashValue(parameters).slice(0, 32);
 }
-

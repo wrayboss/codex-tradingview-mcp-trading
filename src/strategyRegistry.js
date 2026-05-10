@@ -78,4 +78,3 @@ export function discoverStrategies({ rootDir = process.cwd(), strategiesDir = "s
     researchSymbols: () => [...new Set(strategies.flatMap(strategy => strategy.supportedResearchSymbols))],
   };
 }
-
