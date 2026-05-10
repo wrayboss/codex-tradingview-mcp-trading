@@ -436,6 +436,20 @@ function addCompressionBreakRetestCandidate(candidates, base, resolved) {
         trendSlopeLookback: 8,
         minTrendSlopeAtr: 0.04,
       },
+      evidence: {
+        source: "VOLATILITY_100 15m Deriv candles, saved 10000-bar research payload",
+        full: { trades: 85, profitFactor: 1.613846261376639, netPoints: 158.0503 },
+        tradingView: {
+          source: "TradingView Strategy Tester visible summary, DERIV:VOLATILITY_100_INDEX 15m, May 10 2026",
+          metrics: { profitFactor: 1.234 },
+          approved: false,
+          blockers: [
+            "Profit factor 1.234 is below approval threshold 1.6.",
+            "Visible Strategy Tester result is rejection evidence only; no execution scope is expanded.",
+          ],
+        },
+        executionApproved: false,
+      },
     },
     {
       ...base,

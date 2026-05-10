@@ -746,6 +746,10 @@ await group("Codex Autonomy Lab", () => {
   truthy("candidate generator includes V100 trend-filtered V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-short-trend-v3")));
   truthy("candidate generator includes V100 ATR-regime V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-regime-v3")));
   truthy("candidate generator includes V100 confirmation-body V3 compression break retest", volatility100Candidates.some(candidate => candidate.id.endsWith("compression-break-retest-body-v3")));
+  const v100ShortTrend = volatility100Candidates.find(candidate => candidate.id.endsWith("compression-break-retest-short-trend-v3"));
+  eq("V100 short-trend TradingView evidence stays rejected", v100ShortTrend.evidence.tradingView.approved, false);
+  eq("V100 short-trend TradingView evidence records failed profit factor", v100ShortTrend.evidence.tradingView.metrics.profitFactor, 1.234);
+  eq("V100 short-trend evidence keeps execution unapproved", v100ShortTrend.evidence.executionApproved, false);
 
   const candles = Array.from({ length: 90 }, (_, i) => ({
     epoch: 1000 + i * 900,

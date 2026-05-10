@@ -118,6 +118,15 @@ This local result is candidate evidence only. It is not a money-ready approval a
 
 The practical read: V75 V7 is the strongest current momentum candidate by the 10k-bar local score. V6/V5/V4 remain useful historical live-failure variants. V3 and V2 stay as alternates. V50 is flatter and looks better as mean reversion. Treat them as separate research tracks until TradingView validation says otherwise.
 
+### V100 Compression Break Retest Research
+
+`pine/v100_compression_break_retest_short_trend_v3.pine` is the current V100 refinement candidate from the compression-break-retest family. It is research-only and does not change live or demo execution eligibility.
+
+- Local saved-candle result: 85 trades, PF 1.613846261376639, +158.0503 points.
+- Current local ranking also keeps `compression-break-retest-body-v3` strongest by score at 181 trades and PF 1.6810134245892845.
+- TradingView visible Strategy Tester result for the V100 short-trend V3 candidate is rejected: PF 1.234, below the 1.6 promotion gate.
+- Practical conclusion: keep V100 V3 as research evidence only. Do not approve, trade, or expand execution scope from this result.
+
 ## MCP Tools
 
 Execution-shaped tools remain narrow:
