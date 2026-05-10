@@ -2,6 +2,7 @@
 import { integrationTests } from "./integration.js";
 import { backtestValidatorTests } from "./backtestValidator.js";
 import { gitRemotePreflightTests } from "./gitRemotePreflight.js";
+import { derivEaBridgeTests } from "./derivEaBridge.js";
 import { presentationWorkbookTests } from "./presentationWorkbook.js";
 import { strategyPlatformTests } from "./strategyPlatform.js";
 import { emaSeries, rsiSeries, atrSeries, smaSeries, pivotHighAt, pivotLowAt } from "../src/indicators.js";
@@ -2010,6 +2011,21 @@ await group("presentation workbook", async () => {
 
 await group("git remote preflight", async () => {
   for (const t of gitRemotePreflightTests) {
+    try {
+      await t.run(
+        (label, actual, expected) => eq(`${t.name} | ${label}`, actual, expected),
+        (label, actual)           => truthy(`${t.name} | ${label}`, actual)
+      );
+    } catch (err) {
+      fail++;
+      failures.push({ label: t.name, actual: err.message, expected: "no error" });
+      console.log(`  FAIL ${t.name} - threw: ${err.message}`);
+    }
+  }
+});
+
+await group("deriv_ea bridge", async () => {
+  for (const t of derivEaBridgeTests) {
     try {
       await t.run(
         (label, actual, expected) => eq(`${t.name} | ${label}`, actual, expected),

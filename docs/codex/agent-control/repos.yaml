@@ -50,10 +50,10 @@ repos:
         local_services: "pnpm run check:local"
 
   tradingview_deriv:
-    name: "claude-tradingview-mcp-trading"
-    path: "<set-on-vps>/claude-tradingview-mcp-trading"
-    git_root: "<set-on-vps>/claude-tradingview-mcp-trading"
-    windows_reference_path: "C:\\Users\\NewAdmin\\claude-tradingview-mcp-trading"
+    name: "codex-tradingview-mcp-trading"
+    path: "<set-on-vps>/codex-tradingview-mcp-trading"
+    git_root: "<set-on-vps>/codex-tradingview-mcp-trading"
+    windows_reference_path: "C:\\Users\\Administrator\\Documents\\GitHub\\codex-tradingview-mcp-trading"
     primary_remotes:
       - name: "origin"
         url: "https://github.com/wrayboss/codex-tradingview-mcp-trading.git"
@@ -76,7 +76,7 @@ repos:
     hard_boundaries:
       - "Never print or commit DERIV_API_TOKEN."
       - "Keep .env local only."
-      - "Do not introduce Crash or Boom symbols unless explicitly scoped."
+      - "Do not widen live execution to Crash/Boom/Jump/etc. without explicit strategy-scoped promotion."
       - "Do not touch Claude Code MCP/config for Codex-only capability work."
       - "Do not run live/demo execution unless explicitly requested in the current conversation and gates are verified."
     command_inventory:
@@ -90,3 +90,49 @@ repos:
         validate_backtest: "npm run validate-backtest"
         scan_secrets: "npm run scan:secrets"
         launch: "npm run launch"
+        deriv_ea_status: "npm run deriv-ea -- status"
+        deriv_ea_doctor: "npm run deriv-ea -- doctor"
+        deriv_ea_check: "npm run deriv-ea -- check"
+        deriv_ea_backtest_dry: "npm run deriv-ea -- backtest-dry --symbol CRASH1000"
+
+  deriv_ea:
+    name: "deriv_ea"
+    path: "C:\\deriv_ea"
+    git_root: "C:\\deriv_ea"
+    windows_reference_path: "C:\\deriv_ea"
+    primary_remote:
+      name: "origin"
+      url: "https://github.com/wrayboss/deriv_ea.git"
+    observed_branch: "refresh-with-npm-run-deriv-ea-status"
+    observed_status:
+      branch_line: "refresh-with-npm-run-deriv-ea-status"
+      untracked_preview: []
+    local_instruction_files:
+      - "AGENTS.md"
+      - "docs/skills.md"
+      - "task.bat"
+      - "scripts/task.ps1"
+      - "pipeline_contract.py"
+      - "strategy_spec.json"
+      - "pipeline/scripts/paths.json"
+    default_workflow:
+      read_only: "Inspect through npm run deriv-ea -- status and npm run deriv-ea -- doctor from the Codex repo first."
+      implementation: "Use a branch/worktree inside C:\\deriv_ea only after reading AGENTS.md and docs/skills.md."
+      delivery: "Run deriv_ea checks from its repo, then report exact command evidence. Do not merge or deploy unless explicitly asked."
+    hard_boundaries:
+      - "Never commit config.ini, .env, API tokens, DB passwords, model secrets, or local MT5 account details."
+      - "Do not run live MT5 actions, signal_server.py, deployment scripts, mt5_send_order, mt5_close_all, or EA deployment through the Codex bridge."
+      - "No MQL5 trading logic changes unless explicitly requested."
+      - "Use pipeline_contract.py constants; do not hardcode symbols, RR, horizons, thresholds, or feature dimensions."
+      - "Do not use fake market data as replacement evidence."
+    command_inventory:
+      package_manager: "python/powershell"
+      scripts:
+        status_from_codex: "npm run deriv-ea -- status"
+        doctor_from_codex: "npm run deriv-ea -- doctor"
+        check_from_codex: "npm run deriv-ea -- check"
+        quick_check_from_codex: "npm run deriv-ea -- quick-check"
+        backtest_dry_from_codex: "npm run deriv-ea -- backtest-dry --symbol CRASH1000"
+        repo_test: "python -m pytest tests/ -v"
+        precommit: ".\\task.bat precommit"
+        quick_check: ".\\task.bat quick-check"

@@ -21,7 +21,8 @@ When there is a conflict, stop and surface the conflict unless the newer user in
 - Never print secrets in chat. Never commit `.env`, `DERIV_API_TOKEN`, API keys, account tokens, or local runtime state.
 - Keep local `main` branches clean for feature work. Use an isolated branch or worktree for implementation unless the user explicitly asks for a direct local commit.
 - For `PovertyKillerEA`, preserve the durable rule: no feature work on local `main`; use isolated worktree plus PR delivery, and do not merge the PR.
-- For `claude-tradingview-mcp-trading`, default to branch/worktree isolation for risky or multi-file changes. Keep live/demo execution gated by the user's explicit current request plus verified repo gates.
+- For `codex-tradingview-mcp-trading`, default to branch/worktree isolation for risky or multi-file changes. Keep live/demo execution gated by the user's explicit current request plus verified repo gates.
+- For `deriv_ea`, start through the Codex bridge status/doctor commands from the control-plane repo, then read `AGENTS.md` and `docs/skills.md` before any direct work.
 
 ## Direct Repo Work
 
@@ -51,5 +52,5 @@ Use `goals.md` as the local substitute for `/goal` when the slash command is not
 - Do not enable live trading, auto mode, or execution behavior unless the user explicitly asks in the current conversation and gates are verified.
 - Do not touch token/auth surfaces unless explicitly scoped.
 - Do not alter Claude Code MCP/config while building Codex-only tooling.
-- Do not introduce Crash/Boom symbols in the trading repo unless the user explicitly expands symbol scope.
+- Do not widen live execution to Crash/Boom/Jump/etc. without explicit strategy-scoped promotion.
 - Do not make Cloudflare, GitHub, OpenAI, Deriv, or TradingView claims without current docs/tool/file verification when the claim could have changed.

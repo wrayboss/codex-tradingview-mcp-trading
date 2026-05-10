@@ -5,8 +5,8 @@ Use these templates for repeatable repo work. Replace bracketed fields before ru
 ## Bugfix
 
 ```text
-Goal: Fix [bug] in claude-tradingview-mcp-trading.
-Repo: C:\Users\Administrator\Documents\GitHub\claude-tradingview-mcp-trading
+Goal: Fix [bug] in codex-tradingview-mcp-trading.
+Repo: C:\Users\Administrator\Documents\GitHub\codex-tradingview-mcp-trading
 Rules:
 - Inspect git status first.
 - Reproduce the bug with a failing test or exact command.
@@ -68,7 +68,7 @@ Planning command:
 claude -p "[deep planning prompt]" --model opus --permission-mode plan
 
 Implementation command:
-codex exec --cd C:\Users\Administrator\Documents\GitHub\claude-tradingview-mcp-trading --model gpt-5.4-mini --sandbox danger-full-access "[approved plan + implementation request]"
+codex exec --cd C:\Users\Administrator\Documents\GitHub\codex-tradingview-mcp-trading --model gpt-5.4-mini --sandbox danger-full-access "[approved plan + implementation request]"
 
 Rules:
 - Claude Code Opus 4.7, or the strongest available Opus planning model, plans major architecture, breakthroughs, and deep repo analysis.

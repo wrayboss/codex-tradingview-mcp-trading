@@ -1,6 +1,6 @@
 # TradingView / Deriv Repo
 
-Repo path: current `claude-tradingview-mcp-trading` clone. Verify with `git rev-parse --show-toplevel`.
+Repo path: current `codex-tradingview-mcp-trading` clone. Verify with `git rev-parse --show-toplevel`.
 
 ## Working Rule
 
@@ -22,7 +22,7 @@ PR #20 hardens MCP screenshot output paths. Review patch removed unrelated lockf
 
 - Never print or commit `DERIV_API_TOKEN`.
 - Keep `.env` local only.
-- Do not introduce Crash/Boom symbols unless explicitly scoped.
+- Do not widen live execution to Crash/Boom/Jump/etc. without explicit strategy-scoped promotion.
 - Do not run live/demo execution unless the user explicitly asks in the current conversation and gates are verified.
 - Do not treat dry-run connectivity as profitability.
 

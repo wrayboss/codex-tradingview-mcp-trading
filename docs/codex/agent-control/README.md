@@ -1,6 +1,6 @@
 # Agent Control
 
-This folder is the repo-local portable control layer for Codex work across the user's two main repositories. It is intentionally plain Markdown/YAML so it can be read, diffed, and updated without any cloud dependency.
+This folder is the repo-local portable control layer for Codex work across the user's main trading repositories. It is intentionally plain Markdown/YAML so it can be read, diffed, and updated without any cloud dependency.
 
 ## Primary Repositories
 
@@ -24,6 +24,7 @@ This folder is the repo-local portable control layer for Codex work across the u
 - `../update-status.sh` - Linux/VPS status refresh helper for the current repo.
 - `runbooks/povertykillerea.md` - repo-specific operating guide.
 - `runbooks/tradingview-deriv.md` - repo-specific operating guide.
+- `runbooks/deriv-ea.md` - private MT5 Boom/Crash engine operating guide.
 - `checks/validation-commands.md` - command menu by repo and risk level.
 - `checks/browser-checks.md` - built-in browser usage rules.
 - `evidence/latest-status.md` - latest observed local state.

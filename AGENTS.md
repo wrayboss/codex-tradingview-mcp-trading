@@ -20,7 +20,7 @@
 
 - Never print or commit `DERIV_API_TOKEN`.
 - Keep `.env` local only.
-- Do not introduce Crash or Boom symbols into execution unless the user explicitly changes strategy scope.
+- Do not widen live execution to Crash/Boom/Jump/etc. without explicit strategy-scoped promotion.
 - Codex research/chart/candle tools may inspect all known Deriv derived symbols through `docs/codex-strategy-lab.md`; research access does not make a symbol execution-eligible.
 - Codex Autonomy Lab may plan, research, test, and locally backtest candidate strategies, but it must remain research-only until explicit strategy expansion and validation gates approve promotion.
 - Do not touch Claude Code MCP/config when working on Codex-side capability.
@@ -38,7 +38,7 @@ These repo-local copies are the portable VPS source for the shared Codex control
 ## Wrayboss JARVIS / OpenClaw Integration
 
 - OpenClaw primary agent: Wrayboss JARVIS.
-- OpenClaw repo root is configured to this repository: `C:\Users\Administrator\Documents\GitHub\claude-tradingview-mcp-trading`.
+- OpenClaw repo root is configured to this repository: `C:\Users\Administrator\Documents\GitHub\codex-tradingview-mcp-trading`.
 - Wrayboss is the CEO/owner and final decision maker.
 - OpenClaw has full local PowerShell, terminal, filesystem, Codex CLI, and Claude Code access for Wrayboss-approved workflows in this repo.
 - Act like Wrayboss's senior system architect, not a generic bot: concise, decisive, evidence-first, and practical.
@@ -48,6 +48,7 @@ These repo-local copies are the portable VPS source for the shared Codex control
 - Always inspect `git status --short --branch` before and after changes.
 - Do not leave temporary access-test files behind.
 - Operator docs live in `docs/openclaw/mission-control.md`, `docs/openclaw/task-templates.md`, and `docs/openclaw/opus-to-codex-workflow.md`.
+- `deriv_ea` is a separate private MT5 Boom/Crash engine, not a vendored folder in this repo. Use the read-only/check-only bridge commands before making cross-repo claims.
 
 ## Telegram Command Expectations
 

@@ -1,4 +1,4 @@
-# TradingView / Deriv Runbook
+# Codex TradingView / Deriv Runbook
 
 Repo path: current clone root. Verify with `git rev-parse --show-toplevel`.
 
@@ -25,7 +25,7 @@ Treat this as a snapshot. Refresh before acting.
 
 - Never print or commit `DERIV_API_TOKEN`.
 - Keep `.env` local only.
-- Do not introduce Crash or Boom symbols unless the user explicitly changes symbol scope.
+- Do not widen live execution to Crash/Boom/Jump/etc. without explicit strategy-scoped promotion.
 - Keep Codex-side tooling separate from Claude Code MCP/config.
 - Do not modify live execution, loop behavior, or strategy boundaries unless explicitly scoped.
 - Treat `state/backtest-approved.json` as a hard live-trading gate when present in the workflow.
@@ -70,6 +70,22 @@ npm run dry-run
 ```
 
 `npm run git:preflight` and `npm run validate-backtest` can fail because of local environment or missing backtest artifacts. Separate expected environment-state failures from code regressions.
+
+## deriv_ea Bridge
+
+Use `deriv_ea` as the separate private MT5 Boom/Crash engine. Do not copy it into this repo.
+
+From this repo, use only the allowlisted bridge commands:
+
+```powershell
+npm run deriv-ea -- status
+npm run deriv-ea -- doctor
+npm run deriv-ea -- check
+npm run deriv-ea -- quick-check
+npm run deriv-ea -- backtest-dry --symbol CRASH1000
+```
+
+The bridge fails closed when `C:\deriv_ea` is missing and does not expose live MT5 actions.
 
 ## Browser / Chart Checks
 

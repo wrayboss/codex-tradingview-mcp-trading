@@ -27,7 +27,7 @@ Wrayboss's preferred major-workflow pattern:
 ## Default Prompt For Opus
 
 ```text
-You are doing senior architecture planning for Wrayboss in claude-tradingview-mcp-trading.
+You are doing senior architecture planning for Wrayboss in codex-tradingview-mcp-trading.
 Read the repo rules, preserve trading safety boundaries, and produce an implementation plan for Codex.
 Do not modify files. Focus on architecture, risks, exact files, tests, and verification.
 ```
@@ -41,12 +41,12 @@ claude -p "[deep planning prompt]" --model opus --permission-mode plan
 ## Default Prompt For Codex
 
 ```text
-Implement the approved Claude Opus plan in claude-tradingview-mcp-trading.
+Implement the approved Claude Opus plan in codex-tradingview-mcp-trading.
 Keep changes scoped, preserve trading safety rules, run npm test and npm run scan:secrets, and report exact changed files.
 ```
 
 Command pattern:
 
 ```powershell
-codex exec --cd C:\Users\Administrator\Documents\GitHub\claude-tradingview-mcp-trading --model gpt-5.4-mini --sandbox danger-full-access "[approved plan + implementation request]"
+codex exec --cd C:\Users\Administrator\Documents\GitHub\codex-tradingview-mcp-trading --model gpt-5.4-mini --sandbox danger-full-access "[approved plan + implementation request]"
 ```

@@ -5,7 +5,7 @@ This is the content index for the local LLM-maintained wiki.
 ## Repositories
 
 - [PovertyKillerEA](wiki/repos/povertykillerea.md) - Operating notes for the `PovertyKillerEA` clone.
-- [TradingView / Deriv repo](wiki/repos/tradingview-deriv.md) - Operating notes for the `claude-tradingview-mcp-trading` clone.
+- [TradingView / Deriv repo](wiki/repos/tradingview-deriv.md) - Operating notes for the `codex-tradingview-mcp-trading` clone.
 
 ## Concepts
 
