@@ -1,0 +1,77 @@
+{
+  "schema_version": "deriv_ea_readonly_report_contract_v1",
+  "purpose": "Allow Codex and MCP clients to inspect deriv_ea report artifacts without changing runtime state.",
+  "report_root": "out/reports",
+  "tools": [
+    {
+      "name": "deriv_ea.list_reports",
+      "mode": "read_only",
+      "description": "List available report artifacts under the configured reports root.",
+      "reads": [
+        "out/reports/"
+      ],
+      "writes": [],
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.read_demo_status",
+      "mode": "read_only",
+      "description": "Read demo readiness and dry-run status artifacts.",
+      "reads": [
+        "out/reports/demo_readiness_v1/",
+        "out/reports/demo_dry_run_safety_v1/"
+      ],
+      "writes": [],
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.read_symbol_policy",
+      "mode": "read_only",
+      "description": "Read symbol inclusion and blocked symbol policy artifacts.",
+      "reads": [
+        "out/reports/symbol_policy_v1/"
+      ],
+      "writes": [],
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.read_replay_metrics",
+      "mode": "read_only",
+      "description": "Read replay metric and diagnostic report artifacts.",
+      "reads": [
+        "out/reports/replay_metrics_v1/",
+        "out/reports/demo_bundle_v1/"
+      ],
+      "writes": [],
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.read_safety_blockers",
+      "mode": "read_only",
+      "description": "Read safety blocker report artifacts.",
+      "reads": [
+        "out/reports/demo_dry_run_safety_v1/",
+        "out/reports/order_send_disabled_dry_run_v1/",
+        "out/reports/demo_account_identity_v1/",
+        "out/reports/demo_kill_switch_v1/"
+      ],
+      "writes": [],
+      "side_effects": false
+    }
+  ],
+  "forbidden_capabilities": [
+    "trade",
+    "order",
+    "deploy",
+    "start",
+    "run terminal",
+    "run tester",
+    "write db",
+    "retrain",
+    "export"
+  ],
+  "notes": [
+    "This contract is descriptive only.",
+    "Clients using this contract must fail closed when a requested report is missing."
+  ]
+}
