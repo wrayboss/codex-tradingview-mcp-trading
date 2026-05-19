@@ -2,10 +2,14 @@ import { readFileSync } from "fs";
 
 export const DERIV_EA_READONLY_TOOL_NAMES = Object.freeze([
   "deriv_ea.list_reports",
+  "deriv_ea.read_repo_capabilities",
   "deriv_ea.read_demo_status",
+  "deriv_ea.read_shadow_status",
   "deriv_ea.read_symbol_policy",
   "deriv_ea.read_replay_metrics",
   "deriv_ea.read_safety_blockers",
+  "deriv_ea.propose_task_queue",
+  "deriv_ea.propose_pr_plan",
 ]);
 
 export const DERIV_EA_FORBIDDEN_REPORT_TOOL_TERMS = Object.freeze([
@@ -18,6 +22,7 @@ export const DERIV_EA_FORBIDDEN_REPORT_TOOL_TERMS = Object.freeze([
   "write db",
   "retrain",
   "export",
+  "credential",
 ]);
 
 const REPORT_ROOT = "out/reports/";
@@ -82,6 +87,10 @@ export function validateDerivEaReadonlyContract(contract) {
       pushBlocker(blockers, "side_effects_not_false", name || "(unnamed tool)");
     }
 
+    if (tool?.executes === true) {
+      pushBlocker(blockers, "executes_true", name || "(unnamed tool)");
+    }
+
     if (asArray(tool?.writes).length !== 0) {
       pushBlocker(blockers, "write_path_declared", name || "(unnamed tool)");
     }
@@ -95,6 +104,15 @@ export function validateDerivEaReadonlyContract(contract) {
       const normalized = String(readPath ?? "").replaceAll("\\", "/");
       if (!normalized.startsWith(REPORT_ROOT)) {
         pushBlocker(blockers, "non_report_read_path", `${name}: ${readPath}`);
+      }
+    }
+
+    if (name.startsWith("deriv_ea.propose_")) {
+      if (tool?.proposal_only !== true) {
+        pushBlocker(blockers, "proposal_tool_missing_proposal_only", name);
+      }
+      if (tool?.executes !== false) {
+        pushBlocker(blockers, "proposal_tool_must_not_execute", name);
       }
     }
   }
