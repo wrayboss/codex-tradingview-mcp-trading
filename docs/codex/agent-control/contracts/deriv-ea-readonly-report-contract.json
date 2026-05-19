@@ -11,6 +11,18 @@
         "out/reports/"
       ],
       "writes": [],
+      "executes": false,
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.read_repo_capabilities",
+      "mode": "read_only",
+      "description": "Read repo capability report artifacts for safe planning.",
+      "reads": [
+        "out/reports/repo_capabilities_v1/"
+      ],
+      "writes": [],
+      "executes": false,
       "side_effects": false
     },
     {
@@ -22,6 +34,20 @@
         "out/reports/demo_dry_run_safety_v1/"
       ],
       "writes": [],
+      "executes": false,
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.read_shadow_status",
+      "mode": "read_only",
+      "description": "Read shadow status, dashboard, and blocker artifacts.",
+      "reads": [
+        "out/reports/shadow_run_v1/",
+        "out/reports/shadow_dashboard_v1/",
+        "out/reports/shadow_mode_safety_v1/"
+      ],
+      "writes": [],
+      "executes": false,
       "side_effects": false
     },
     {
@@ -32,6 +58,7 @@
         "out/reports/symbol_policy_v1/"
       ],
       "writes": [],
+      "executes": false,
       "side_effects": false
     },
     {
@@ -43,6 +70,7 @@
         "out/reports/demo_bundle_v1/"
       ],
       "writes": [],
+      "executes": false,
       "side_effects": false
     },
     {
@@ -56,6 +84,33 @@
         "out/reports/demo_kill_switch_v1/"
       ],
       "writes": [],
+      "executes": false,
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.propose_task_queue",
+      "mode": "read_only",
+      "description": "Propose a safe draft task queue artifact from report evidence.",
+      "reads": [
+        "out/reports/repo_capabilities_v1/",
+        "out/reports/agent_guardrails_v1/"
+      ],
+      "writes": [],
+      "executes": false,
+      "proposal_only": true,
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.propose_pr_plan",
+      "mode": "read_only",
+      "description": "Propose a draft PR plan artifact from safe task and review reports.",
+      "reads": [
+        "out/reports/agent_guardrails_v1/",
+        "out/reports/review_packet_v1/"
+      ],
+      "writes": [],
+      "executes": false,
+      "proposal_only": true,
       "side_effects": false
     }
   ],
@@ -68,10 +123,12 @@
     "run tester",
     "write db",
     "retrain",
-    "export"
+    "export",
+    "credential"
   ],
   "notes": [
     "This contract is descriptive only.",
-    "Clients using this contract must fail closed when a requested report is missing."
+    "Clients using this contract must fail closed when a requested report is missing.",
+    "The propose tools return text or artifact proposals only and must not mutate repos, launch processes, call terminals, write databases, or create merge actions."
   ]
 }
