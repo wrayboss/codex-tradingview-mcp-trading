@@ -74,6 +74,18 @@ Known follow-up: `AGENTS.md` currently tells agents to read `AGENTS/skills.md`, 
 - Do not print or commit secrets from `config.ini`, `.env`, local DB config, API tokens, or account files.
 - Do not claim model, backtest, or EA validity without command output or report evidence.
 
+## Agent-Control Planning Contract
+
+The MCP contract may expose these Deriv EA planning surfaces:
+
+- `deriv_ea.read_repo_capabilities`
+- `deriv_ea.read_shadow_status`
+- `deriv_ea.read_safety_blockers`
+- `deriv_ea.propose_task_queue`
+- `deriv_ea.propose_pr_plan`
+
+The `propose_*` surfaces are proposal-only. They may return text or artifact plans from existing report evidence, but they must not mutate repos, start processes, call terminals, write databases, place orders, create merge actions, or change model artifacts.
+
 ## Role In The Umbrella
 
 `codex-tradingview-mcp-trading` is the control plane for Jarvis, Codex, TradingView, Pine, research ranking, and promotion gates.
