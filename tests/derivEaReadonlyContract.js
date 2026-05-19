@@ -25,6 +25,39 @@ export const derivEaReadonlyContractTests = [
     },
   },
   {
+    name: "contract includes agent-control planning tools",
+    async run(eq, truthy) {
+      const contract = loadDerivEaReadonlyContract(CONTRACT_PATH);
+      const names = contract.tools.map(tool => tool.name);
+
+      for (const name of [
+        "deriv_ea.read_repo_capabilities",
+        "deriv_ea.read_shadow_status",
+        "deriv_ea.read_safety_blockers",
+        "deriv_ea.propose_task_queue",
+        "deriv_ea.propose_pr_plan",
+      ]) {
+        truthy(`${name} is listed`, names.includes(name));
+      }
+      eq("contract validates", validateDerivEaReadonlyContract(contract).ok, true);
+    },
+  },
+  {
+    name: "proposal tools cannot execute or write",
+    async run(eq) {
+      const contract = loadDerivEaReadonlyContract(CONTRACT_PATH);
+      const proposalTools = contract.tools.filter(tool => tool.name.startsWith("deriv_ea.propose_"));
+
+      eq("proposal tool count", proposalTools.length, 2);
+      for (const tool of proposalTools) {
+        eq(`${tool.name} proposal only`, tool.proposal_only, true);
+        eq(`${tool.name} executes false`, tool.executes, false);
+        eq(`${tool.name} side effects false`, tool.side_effects, false);
+        eq(`${tool.name} writes empty`, tool.writes.length, 0);
+      }
+    },
+  },
+  {
     name: "forbidden verbs fail contract validation",
     async run(eq, truthy) {
       const contract = loadDerivEaReadonlyContract(CONTRACT_PATH);
@@ -57,6 +90,7 @@ export const derivEaReadonlyContractTests = [
         " write db",
         " place order",
         " start service",
+        " merge pull request",
       ];
 
       for (const token of forbidden) {
