@@ -88,12 +88,82 @@
       "side_effects": false
     },
     {
+      "name": "deriv_ea.read_agent_loop_state",
+      "mode": "read_only",
+      "description": "Read canonical agent loop state report artifacts.",
+      "reads": [
+        "out/reports/agent_loop_state_v1/"
+      ],
+      "writes": [],
+      "executes": false,
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.read_bot_factory_loop_status",
+      "mode": "read_only",
+      "description": "Read bot-factory loop dry-run status artifacts.",
+      "reads": [
+        "out/reports/bot_factory_loop_dry_run_v1/"
+      ],
+      "writes": [],
+      "executes": false,
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.read_shadow_quality",
+      "mode": "read_only",
+      "description": "Read shadow decision quality report artifacts.",
+      "reads": [
+        "out/reports/shadow_decision_quality_v1/"
+      ],
+      "writes": [],
+      "executes": false,
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.read_shadow_to_demo_gap",
+      "mode": "read_only",
+      "description": "Read shadow-to-demo gap report artifacts.",
+      "reads": [
+        "out/reports/shadow_to_demo_gap_v1/"
+      ],
+      "writes": [],
+      "executes": false,
+      "side_effects": false
+    },
+    {
       "name": "deriv_ea.propose_task_queue",
       "mode": "read_only",
       "description": "Propose a safe draft task queue artifact from report evidence.",
       "reads": [
         "out/reports/repo_capabilities_v1/",
         "out/reports/agent_guardrails_v1/"
+      ],
+      "writes": [],
+      "executes": false,
+      "proposal_only": true,
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.propose_experiment_queue",
+      "mode": "read_only",
+      "description": "Propose research experiment queue artifacts from hypothesis and proposal reports.",
+      "reads": [
+        "out/reports/strategy_hypotheses_v1/",
+        "out/reports/experiment_proposals_v1/"
+      ],
+      "writes": [],
+      "executes": false,
+      "proposal_only": true,
+      "side_effects": false
+    },
+    {
+      "name": "deriv_ea.propose_safe_pr_plan",
+      "mode": "read_only",
+      "description": "Propose safe draft PR plan artifacts from experiment proposal reports.",
+      "reads": [
+        "out/reports/experiment_proposals_v1/",
+        "out/reports/safe_pr_plan_v1/"
       ],
       "writes": [],
       "executes": false,
@@ -124,11 +194,16 @@
     "write db",
     "retrain",
     "export",
-    "credential"
+    "credential",
+    "merge",
+    "push",
+    "commit",
+    "mutate"
   ],
   "notes": [
     "This contract is descriptive only.",
     "Clients using this contract must fail closed when a requested report is missing.",
-    "The propose tools return text or artifact proposals only and must not mutate repos, launch processes, call terminals, write databases, or create merge actions."
+    "The propose tools return text or artifact proposals only and must not mutate repos, launch processes, call terminals, write databases, or create merge actions.",
+    "Any future implementation must resolve report paths to absolute paths and clamp them beneath the configured reports root before reading."
   ]
 }
