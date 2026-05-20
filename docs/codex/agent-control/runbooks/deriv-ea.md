@@ -81,7 +81,13 @@ The MCP contract may expose these Deriv EA planning surfaces:
 - `deriv_ea.read_repo_capabilities`
 - `deriv_ea.read_shadow_status`
 - `deriv_ea.read_safety_blockers`
+- `deriv_ea.read_agent_loop_state`
+- `deriv_ea.read_bot_factory_loop_status`
+- `deriv_ea.read_shadow_quality`
+- `deriv_ea.read_shadow_to_demo_gap`
 - `deriv_ea.propose_task_queue`
+- `deriv_ea.propose_experiment_queue`
+- `deriv_ea.propose_safe_pr_plan`
 - `deriv_ea.propose_pr_plan`
 
 The `propose_*` surfaces are proposal-only. They may return text or artifact plans from existing report evidence, but they must not mutate repos, start processes, call terminals, write databases, place orders, create merge actions, or change model artifacts.

@@ -8,8 +8,14 @@ export const DERIV_EA_READONLY_TOOL_NAMES = Object.freeze([
   "deriv_ea.read_symbol_policy",
   "deriv_ea.read_replay_metrics",
   "deriv_ea.read_safety_blockers",
+  "deriv_ea.read_agent_loop_state",
+  "deriv_ea.read_bot_factory_loop_status",
+  "deriv_ea.read_shadow_quality",
+  "deriv_ea.read_shadow_to_demo_gap",
   "deriv_ea.propose_task_queue",
   "deriv_ea.propose_pr_plan",
+  "deriv_ea.propose_experiment_queue",
+  "deriv_ea.propose_safe_pr_plan",
 ]);
 
 export const DERIV_EA_FORBIDDEN_REPORT_TOOL_TERMS = Object.freeze([
@@ -23,6 +29,10 @@ export const DERIV_EA_FORBIDDEN_REPORT_TOOL_TERMS = Object.freeze([
   "retrain",
   "export",
   "credential",
+  "merge",
+  "push",
+  "commit",
+  "mutate",
 ]);
 
 const REPORT_ROOT = "out/reports/";
@@ -37,7 +47,10 @@ function pushBlocker(blockers, code, detail) {
 
 function containsForbiddenTerm(value) {
   const text = String(value ?? "").toLowerCase();
-  return DERIV_EA_FORBIDDEN_REPORT_TOOL_TERMS.find(term => text.includes(term));
+  return DERIV_EA_FORBIDDEN_REPORT_TOOL_TERMS.find(term => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`).test(text);
+  });
 }
 
 export function loadDerivEaReadonlyContract(contractPath) {
