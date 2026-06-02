@@ -14,6 +14,14 @@ https://github.com/wrayboss/codex-tradingview-mcp-trading
 https://github.com/wrayboss/trading-jarvis-codex-plugin
 ```
 
+## Supporting Lab URL (optional)
+
+```text
+https://github.com/wrayboss/deriv-ea-lab
+```
+
+`deriv-ea-lab` is a public-safe, research-only companion lab. It demonstrates MQL5 architecture patterns, ML pipeline scaffolding, dry-run validation gates, and secret hygiene with machine-checked safety gates. It contains no live trading logic, no real Deriv data, no trained models, and no profitability claims, and it does not expose any private repository details.
+
 ## Maintainer Role Statement
 
 I maintain the repository, safety gates, MCP contracts, validation scripts, and OSS readiness materials. I am preparing it as a local-first Codex/MCP research control plane with dry-run defaults and explicit live-trading boundaries.
@@ -38,6 +46,7 @@ OpenAI API credits would support local Codex engineering, MCP contract testing, 
 - It exposes MCP tools that separate read-only inspection, dry-run analysis, and execution-gated workflows.
 - It includes validation scripts that keep missing approval, account, or risk state blocked by default.
 - It documents repo-local setup, contribution rules, and security handling.
+- It is complemented by a public-safe research lab (`deriv-ea-lab`) that isolates reusable safety and scaffolding patterns behind machine-checked gates, without exposing data, models, secrets, or live-trading paths.
 
 ## Safety And Privacy Notes
 

@@ -367,4 +367,9 @@ node scripts/set-chart.js VOLATILITY_50 15
 | `safety-check-log.json` | Decision log (all cycles) |
 | `trades.csv` | Executed signal log with idempotent settlement rows by contract ID |
 
+## Related projects
+
+- [`wrayboss/trading-jarvis-codex-plugin`](https://github.com/wrayboss/trading-jarvis-codex-plugin) — agent-tooling command-center plugin for this workflow.
+- [`wrayboss/deriv-ea-lab`](https://github.com/wrayboss/deriv-ea-lab) — a public-safe, research-only lab demonstrating MQL5 architecture patterns, ML pipeline scaffolding, dry-run gates, and secret hygiene. No live trading, no real data, no models, and no profitability claims.
+
 This is automation infrastructure, not financial advice. Use demo mode and verify all behavior before risking real money.
