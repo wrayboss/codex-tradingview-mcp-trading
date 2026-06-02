@@ -1,6 +1,8 @@
-# Claude + TradingView MCP Trading
+# Codex TradingView MCP Trading
 
-Breakout + retest trading bot for Deriv synthetic indices. The runtime entry point is `bot.js`, with strategy parameters in `rules.json`.
+Safety-gated Codex/MCP control plane for local TradingView and Deriv research workflows. The repo combines read-only bridge contracts, dry-run strategy evaluation, secret scanning, validation gates, and fail-closed checks around a Deriv synthetic-index breakout/retest strategy.
+
+This project is for local research and guarded operator workflows. It does not guarantee trading returns, and it does not make research-only symbols execution-eligible. Live or demo execution requires a current explicit user request plus the repo's account, approval, risk, and open-position gates.
 
 ## Agent Posture
 
