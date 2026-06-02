@@ -1,7 +1,13 @@
 {
   "name": "codex-tradingview-mcp-trading",
   "version": "2.0.0",
-  "description": "Breakout + Retest trading bot - Claude + TradingView MCP + Deriv execution",
+  "description": "Safety-gated Codex MCP control plane for local TradingView and Deriv research workflows.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wrayboss/codex-tradingview-mcp-trading.git"
+  },
+  "homepage": "https://github.com/wrayboss/codex-tradingview-mcp-trading#readme",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
