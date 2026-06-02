@@ -35,8 +35,9 @@ This repository is not a promise of trading profitability and not an invitation 
 - [x] Security, contribution, conduct, issue, and PR templates added.
 - [x] Repo-local secret scan available with `npm run scan:secrets`.
 - [x] CI workflows already run tests, Codex MCP self-test, safe-gate default block, and secret scan.
-- [ ] Full-history secret scan must pass immediately before public visibility is changed.
-- [ ] Maintainer must decide whether historical docs under `docs/codex/` expose private operational details before public launch.
+- [x] Historical `docs/exchanges/coinbase.md` private-key finding removed from reachable branch history.
+- [x] Full-history secret scan passed after history remediation in a fresh remote clone.
+- [x] Public claims avoid unsupported profitability, adoption, user, star, download, or revenue claims.
 
 ## Public Readiness Decision
 
