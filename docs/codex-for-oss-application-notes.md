@@ -46,7 +46,7 @@ OpenAI API credits would support local Codex engineering, MCP contract testing, 
 - The Codex bridge must not place live trades by default.
 - Public claims should avoid guaranteed returns, adoption numbers, or production-readiness claims without evidence.
 - Safe-gate behavior is expected to fail closed unless explicit approval, account, and risk state are present.
-- Historical Coinbase key-like material was treated as compromised and removed from branch history. Any matching external key must be revoked or rotated before public release.
+- A historical Coinbase documentation false positive was removed from branch history. Sanitized review found explanatory private-key delimiter text and placeholders, not a real pasted private key.
 
 ## Validation Evidence
 

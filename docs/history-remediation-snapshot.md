@@ -30,7 +30,9 @@ Full-history gitleaks identified one historical private-key finding:
 - Rule: `private-key`
 - Fingerprint: `ca8e0d11c28f2b6ecdb567df8bfb9a147381814c:docs/exchanges/coinbase.md:private-key:37`
 
-The finding was not provably fake from repository evidence, so it was treated as compromised. Any matching Coinbase API key material must be revoked or rotated before public release.
+The finding was investigated with redacted and sanitized checks. The historical file contained explanatory Coinbase API private-key delimiter text and placeholder guidance, not a pasted PEM key body. Sanitized raw-file analysis found marker text on documentation lines, no long base64-like PEM body lines, and `has_actual_pem_block=False`.
+
+No real Coinbase private key material was found in repository evidence. No matching key was identified for rotation. If any external Coinbase key was ever created from this guide, that external key should still be managed according to normal account-security policy.
 
 ## Remediation
 
@@ -71,3 +73,8 @@ Fresh remote clone after force-push:
 - `gitleaks detect --source . --no-git=false --redact`: no leaks found
 - `git log --all -- docs/exchanges/coinbase.md`: no history returned
 - Targeted private-key marker search across refs: no matches
+
+Direct old-SHA reachability check:
+
+- GitHub continued to serve the old commit object by direct SHA after force-push.
+- Sanitized raw-file analysis of that old object found explanatory delimiter text only, no long base64-like PEM body lines, and no actual PEM private-key block.
