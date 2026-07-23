@@ -1,0 +1,21 @@
+name: Export ChatGPT Skill
+
+on:
+  push:
+    branches:
+      - codex/chatgpt-skill-package
+    paths:
+      - dist/wrayboss-codex-tradingview.zip
+      - .github/workflows/export-chatgpt-skill.yml
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wrayboss-codex-tradingview
+          path: dist/wrayboss-codex-tradingview.zip
+          if-no-files-found: error
+          retention-days: 1
