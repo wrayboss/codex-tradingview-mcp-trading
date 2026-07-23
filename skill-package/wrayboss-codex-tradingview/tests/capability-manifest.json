@@ -1,0 +1,46 @@
+{
+    "generatedAtUtc":  "2026-07-23T19:24:29.1168377Z",
+    "overall":  "YES - EXECUTED AND VERIFIED",
+    "failedChecks":  0,
+    "fullyExercised":  [
+                           "environment_preflight",
+                           "invalid_tool_failure_path",
+                           "invalid_cdp_failure_path",
+                           "reversible_markup"
+                       ],
+    "readOnlyExercised":  [
+                              "chart_get_state",
+                              "quote_get",
+                              "draw_list",
+                              "pine_get_errors",
+                              "replay_status",
+                              "alert_list",
+                              "watchlist_get",
+                              "jarvis_morning_brief",
+                              "deriv_ea_status"
+                          ],
+    "discoveryOnly":  [
+                          "pine_compile",
+                          "pine_set_source",
+                          "alert_create",
+                          "alert_delete",
+                          "replay_start",
+                          "replay_step",
+                          "replay_stop",
+                          "ui_evaluate",
+                          "layout_switch",
+                          "pane_set_layout",
+                          "tab_new",
+                          "tab_close"
+                      ],
+    "untested":  [
+                     "fresh_agent_behavioral_compliance"
+                 ],
+    "failed":  [
+
+               ],
+    "notes":  [
+                  "Fresh-agent behavioral pressure testing was blocked by the local Codex CLI usage limit.",
+                  "Discovery-only capabilities are not described as executed."
+              ]
+}

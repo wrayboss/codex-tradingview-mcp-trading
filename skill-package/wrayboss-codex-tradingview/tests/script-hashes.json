@@ -1,0 +1,31 @@
+{
+    "generatedAtUtc":  "2026-07-23T19:31:36.5380359Z",
+    "algorithm":  "SHA256",
+    "files":  [
+                  {
+                      "file":  "scripts\\install-runtime.ps1",
+                      "sha256":  "B660A224E2FD068937413D306AD119C1EFE86D1EAEADB6347B1A1E9585FDFD2A",
+                      "bytes":  1858
+                  },
+                  {
+                      "file":  "scripts\\invoke-mcp-tool.ps1",
+                      "sha256":  "0507AB14C7FA9524229BD4FDE0F8AD430630782A598C5C5B3C479F7970EA777E",
+                      "bytes":  2173
+                  },
+                  {
+                      "file":  "scripts\\mcp-client.mjs",
+                      "sha256":  "D569165601448AF27BE635BC91ED66E1E859435CA3A4C6F5C72CF2786265A35E",
+                      "bytes":  6711
+                  },
+                  {
+                      "file":  "scripts\\run-capability-tests.ps1",
+                      "sha256":  "D9C93E19ED5158D0860C583C07DF4F2D4257E295FE1E34AF5A79C425F6EC19E0",
+                      "bytes":  9575
+                  },
+                  {
+                      "file":  "scripts\\verify-environment.ps1",
+                      "sha256":  "E187FE1034E4ED98865A2CF8BE5BC5639F700E4642205B113064A884D4E49E0D",
+                      "bytes":  8419
+                  }
+              ]
+}
