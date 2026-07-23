@@ -16,3 +16,5 @@ state-test-*.json
 
 # Generated presentation output
 outputs/3289-trades-presentation/trades.presentation-20260429-065448.xlsx
+
+.worktrees/
